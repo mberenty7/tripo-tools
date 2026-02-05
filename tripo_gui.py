@@ -186,7 +186,7 @@ class TripoGUI(QMainWindow):
         self.multi_images = []
         grid = QGridLayout()
         grid.setSpacing(8)
-        view_labels = ["Front", "Front-Right", "Back-Right", "Back", "Back-Left", "Front-Left"]
+        view_labels = ["Front", "Back", "Left", "Right"]
 
         for i, label in enumerate(view_labels):
             img = ImageDropLabel(f"{label}\n(click/drop)")
@@ -199,7 +199,7 @@ class TripoGUI(QMainWindow):
             lbl.setStyleSheet("color: #aaa; font-size: 11px;")
             col_widget.addWidget(lbl)
             col_widget.addWidget(img)
-            grid.addLayout(col_widget, i // 3, i % 3)
+            grid.addLayout(col_widget, i // 2, i % 2)
 
         multi_layout.addLayout(grid)
 
