@@ -1,12 +1,8 @@
 """
 PySide6 GUI for Tripo AI 3D generation.
-Supports single image, multiview turnaround, and text-to-3D.
-
-Requirements:
-    pip install PySide6 requests
 
 Usage:
-    python tripo_gui.py
+    tripo-gui
 """
 
 import sys
@@ -15,40 +11,33 @@ import json
 import threading
 from pathlib import Path
 
-# Ensure tripo_generate is importable regardless of working directory
-sys.path.insert(0, str(Path(__file__).parent))
-from PySide6.QtCore import Qt, QSettings, Signal, QObject
-from PySide6.QtGui import QTextCursor, QPixmap, QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QComboBox, QTextEdit, QFileDialog,
-    QGroupBox, QFormLayout, QProgressBar, QMessageBox, QScrollArea,
-    QFrame, QTabWidget, QSpinBox, QSizePolicy, QGridLayout,
-)
+try:
+    from PySide6.QtCore import Qt, QSettings, Signal, QObject
+    from PySide6.QtGui import QTextCursor, QPixmap, QDragEnterEvent, QDropEvent
+    from PySide6.QtWidgets import (
+        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+        QLabel, QLineEdit, QPushButton, QComboBox, QTextEdit, QFileDialog,
+        QGroupBox, QFormLayout, QProgressBar, QMessageBox, QGridLayout,
+        QTabWidget, QSpinBox,
+    )
+except ImportError:
+    print("PySide6 not installed. Run: pip install PySide6")
+    print("Or install with GUI support: pip install tripo-tools[gui]")
+    sys.exit(1)
 
-SCRIPT_DIR = Path(__file__).parent
+from .client import TripoClient
 
 OUTPUT_FORMATS = ["glb", "fbx", "obj", "stl", "usdz"]
-
 SUPPORTED_IMAGES = "Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"
 
-API_BASE = "https://api.tripo3d.ai/v2/openapi"
-
-
-# ============================================================
-# Worker signals (thread-safe GUI updates)
-# ============================================================
 
 class WorkerSignals(QObject):
-    progress = Signal(int, str)       # percent, status text
-    log = Signal(str)                 # log message
-    finished = Signal(bool, str)      # success, message
-    balance = Signal(str)             # balance info
+    """Thread-safe signals for GUI updates."""
+    progress = Signal(int, str)
+    log = Signal(str)
+    finished = Signal(bool, str)
+    balance = Signal(str)
 
-
-# ============================================================
-# Image Drop Label
-# ============================================================
 
 class ImageDropLabel(QLabel):
     """A label that accepts drag-and-drop images and click-to-browse."""
@@ -101,9 +90,7 @@ class ImageDropLabel(QLabel):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            path, _ = QFileDialog.getOpenFileName(
-                self, "Select Image", "", SUPPORTED_IMAGES
-            )
+            path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", SUPPORTED_IMAGES)
             if path:
                 self.set_image(path)
 
@@ -119,11 +106,9 @@ class ImageDropLabel(QLabel):
                 self.set_image(path)
 
 
-# ============================================================
-# Main GUI
-# ============================================================
-
 class TripoGUI(QMainWindow):
+    """Main Tripo GUI window."""
+    
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Tripo AI — 3D Generation")
@@ -146,7 +131,7 @@ class TripoGUI(QMainWindow):
         layout = QVBoxLayout(central)
         layout.setSpacing(8)
 
-        # --- API Key ---
+        # API Key row
         key_row = QHBoxLayout()
         key_row.addWidget(QLabel("API Key:"))
         self.api_key_input = QLineEdit()
@@ -165,7 +150,7 @@ class TripoGUI(QMainWindow):
 
         layout.addLayout(key_row)
 
-        # --- Input Tabs ---
+        # Input Tabs
         self.input_tabs = QTabWidget()
 
         # Tab 1: Single Image
@@ -175,29 +160,24 @@ class TripoGUI(QMainWindow):
         single_layout.addWidget(self.single_image)
         self.input_tabs.addTab(single_tab, "📷 Single Image")
 
-        # Tab 2: Multiview Turnaround
+        # Tab 2: Multiview
         multi_tab = QWidget()
         multi_layout = QVBoxLayout(multi_tab)
-
-        multi_desc = QLabel(
-            "Add 2-6 turnaround images from different angles.\n"
-            "Best results: even spacing around the object at roughly eye level."
-        )
+        
+        multi_desc = QLabel("Add 4 turnaround images from different angles.")
         multi_desc.setStyleSheet("color: #888; font-size: 11px;")
-        multi_desc.setWordWrap(True)
         multi_layout.addWidget(multi_desc)
 
-        # Grid of image drop slots
         self.multi_images = []
         grid = QGridLayout()
         grid.setSpacing(8)
-        view_labels = ["Front", "Back", "Left", "Right"]
-
-        for i, label in enumerate(view_labels):
+        
+        for i, label in enumerate(["Front", "Back", "Left", "Right"]):
             img = ImageDropLabel(f"{label}\n(click/drop)")
             img.setMinimumSize(120, 120)
             img.setMaximumHeight(140)
             self.multi_images.append(img)
+            
             col_widget = QVBoxLayout()
             lbl = QLabel(label)
             lbl.setAlignment(Qt.AlignCenter)
@@ -208,14 +188,11 @@ class TripoGUI(QMainWindow):
 
         multi_layout.addLayout(grid)
 
-        multi_btn_row = QHBoxLayout()
-        clear_multi_btn = QPushButton("Clear All")
-        clear_multi_btn.clicked.connect(self._clear_multiview)
-        multi_btn_row.addStretch()
-        multi_btn_row.addWidget(clear_multi_btn)
-        multi_layout.addLayout(multi_btn_row)
+        clear_btn = QPushButton("Clear All")
+        clear_btn.clicked.connect(self._clear_multiview)
+        multi_layout.addWidget(clear_btn, alignment=Qt.AlignRight)
 
-        self.input_tabs.addTab(multi_tab, "🔄 Multiview Turnaround")
+        self.input_tabs.addTab(multi_tab, "🔄 Multiview")
 
         # Tab 3: Text Prompt
         text_tab = QWidget()
@@ -223,8 +200,7 @@ class TripoGUI(QMainWindow):
         self.prompt_input = QTextEdit()
         self.prompt_input.setPlaceholderText(
             "Describe the 3D object you want to generate...\n\n"
-            'e.g., "A weathered wooden barrel with iron bands, '
-            'medieval fantasy style"'
+            'e.g., "A weathered wooden barrel with iron bands"'
         )
         self.prompt_input.setMaximumHeight(120)
         text_layout.addWidget(self.prompt_input)
@@ -232,7 +208,7 @@ class TripoGUI(QMainWindow):
 
         layout.addWidget(self.input_tabs)
 
-        # --- Output Settings ---
+        # Output Settings
         output_group = QGroupBox("Output")
         output_layout = QFormLayout(output_group)
 
@@ -250,21 +226,18 @@ class TripoGUI(QMainWindow):
         self.format_combo = QComboBox()
         self.format_combo.addItems(OUTPUT_FORMATS)
         options_row.addWidget(self.format_combo)
-
         options_row.addSpacing(20)
         options_row.addWidget(QLabel("Timeout (s):"))
         self.timeout_spin = QSpinBox()
         self.timeout_spin.setRange(60, 1800)
         self.timeout_spin.setValue(600)
-        self.timeout_spin.setSingleStep(60)
         options_row.addWidget(self.timeout_spin)
-
         options_row.addStretch()
         output_layout.addRow(options_row)
 
         layout.addWidget(output_group)
 
-        # --- Generate Button ---
+        # Generate Button
         self.generate_btn = QPushButton("🚀  Generate 3D Model")
         self.generate_btn.setMinimumHeight(44)
         self.generate_btn.setStyleSheet(
@@ -276,7 +249,7 @@ class TripoGUI(QMainWindow):
         self.generate_btn.clicked.connect(self._generate)
         layout.addWidget(self.generate_btn)
 
-        # --- Progress ---
+        # Progress
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.hide()
@@ -288,7 +261,7 @@ class TripoGUI(QMainWindow):
         self.status_label.hide()
         layout.addWidget(self.status_label)
 
-        # --- Log ---
+        # Log
         log_group = QGroupBox("Log")
         log_layout = QVBoxLayout(log_group)
         self.log_output = QTextEdit()
@@ -296,14 +269,13 @@ class TripoGUI(QMainWindow):
         self.log_output.setMaximumHeight(160)
         self.log_output.setStyleSheet(
             "QTextEdit { background-color: #1e1e1e; color: #d4d4d4; "
-            "font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }"
+            "font-family: 'Consolas', monospace; font-size: 12px; }"
         )
         log_layout.addWidget(self.log_output)
         layout.addWidget(log_group)
 
         self.statusBar().showMessage("Ready")
 
-    # --------------------------------------------------------- Actions
     def _get_api_key(self):
         key = self.api_key_input.text().strip()
         if not key:
@@ -311,17 +283,12 @@ class TripoGUI(QMainWindow):
         return key
 
     def _toggle_key_visibility(self, checked):
-        self.api_key_input.setEchoMode(
-            QLineEdit.Normal if checked else QLineEdit.Password
-        )
+        self.api_key_input.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
         self.show_key_btn.setText("Hide" if checked else "Show")
 
     def _browse_output(self):
         fmt = self.format_combo.currentText()
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Output", "",
-            f"3D Model (*.{fmt});;All Files (*)"
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Save Output", "", f"3D Model (*.{fmt})")
         if path:
             if not path.lower().endswith(f".{fmt}"):
                 path += f".{fmt}"
@@ -338,12 +305,10 @@ class TripoGUI(QMainWindow):
             return
 
         self.balance_btn.setEnabled(False)
-        threading.Thread(target=self._balance_worker, args=(api_key,),
-                         daemon=True).start()
+        threading.Thread(target=self._balance_worker, args=(api_key,), daemon=True).start()
 
     def _balance_worker(self, api_key):
         try:
-            from tripo_generate import TripoClient
             client = TripoClient(api_key)
             balance = client.get_balance()
             self.signals.balance.emit(json.dumps(balance, indent=2))
@@ -354,12 +319,10 @@ class TripoGUI(QMainWindow):
         self.balance_btn.setEnabled(True)
         QMessageBox.information(self, "Tripo Balance", info)
 
-    # --------------------------------------------------------- Generate
     def _generate(self):
         api_key = self._get_api_key()
         if not api_key:
-            QMessageBox.warning(self, "No API Key",
-                                "Enter your Tripo API key or set TRIPO_API_KEY.")
+            QMessageBox.warning(self, "No API Key", "Enter your Tripo API key.")
             return
 
         output = self.output_path.text().strip()
@@ -375,7 +338,6 @@ class TripoGUI(QMainWindow):
         timeout = self.timeout_spin.value()
         tab = self.input_tabs.currentIndex()
 
-        # Determine mode
         if tab == 0:  # Single image
             img = self.single_image.image_path
             if not img:
@@ -383,16 +345,13 @@ class TripoGUI(QMainWindow):
                 return
             mode = "single"
             payload = {"image": img}
-
         elif tab == 1:  # Multiview
             images = [img.image_path for img in self.multi_images if img.image_path]
             if len(images) < 2:
-                QMessageBox.warning(self, "Not Enough Images",
-                                    "Multiview needs at least 2 images.")
+                QMessageBox.warning(self, "Not Enough Images", "Need at least 2 images.")
                 return
             mode = "multiview"
             payload = {"images": images}
-
         elif tab == 2:  # Text
             prompt = self.prompt_input.toPlainText().strip()
             if not prompt:
@@ -401,53 +360,13 @@ class TripoGUI(QMainWindow):
             mode = "text"
             payload = {"prompt": prompt}
 
-        # Build confirmation details
-        if mode == "single":
-            task_body = {
-                "type": "image_to_model",
-                "file": {"type": "image_token", "file_token": f"<upload:{os.path.basename(payload['image'])}>"},
-            }
-            input_summary = f"Image: {payload['image']}"
-        elif mode == "multiview":
-            task_body = {
-                "type": "multiview_to_model",
-                "files": [{"type": "image_token", "file_token": f"<upload:{os.path.basename(p)}>"} for p in payload["images"]],
-            }
-            input_summary = f"Images ({len(payload['images'])}):\n" + "\n".join(f"  • {p}" for p in payload["images"])
-        elif mode == "text":
-            task_body = {
-                "type": "text_to_model",
-                "prompt": payload["prompt"],
-            }
-            input_summary = f"Prompt: {payload['prompt']}"
-
-        confirm_text = (
-            f"Ready to send to Tripo AI?\n\n"
-            f"{input_summary}\n\n"
-            f"Output: {output}\n"
-            f"Format: {fmt}\n\n"
-            f"--- API Request ---\n"
-            f"POST {API_BASE}/task\n"
-            f"{json.dumps(task_body, indent=2)}"
-        )
-
-        reply = QMessageBox.question(
-            self, "Confirm Generation", confirm_text,
-            QMessageBox.Yes | QMessageBox.Cancel,
-            QMessageBox.Yes,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        # Go
         self.log_output.clear()
-        self._on_log(f"Mode: {mode}\nOutput: {output}\nFormat: {fmt}\n\n")
+        self._on_log(f"Mode: {mode}\nOutput: {output}\n\n")
 
         self.generate_btn.setEnabled(False)
         self.progress_bar.setValue(0)
         self.progress_bar.show()
         self.status_label.show()
-        self.statusBar().showMessage("Generating...")
 
         self.worker_thread = threading.Thread(
             target=self._generate_worker,
@@ -458,89 +377,28 @@ class TripoGUI(QMainWindow):
         self._save_settings()
 
     def _generate_worker(self, api_key, mode, payload, output, fmt, timeout):
-        """Run generation in background thread."""
         try:
-            from tripo_generate import TripoClient
-
             client = TripoClient(api_key)
 
-            if mode == "single":
-                self.signals.log.emit("Uploading image...\n")
-                image_token = client.upload_image(payload["image"])
-
-                self.signals.log.emit("Creating image-to-3D task...\n")
-                params = {
-                    "file": {"type": "image_token", "file_token": image_token},
-                }
-                task_id = client.create_task("image_to_model", params)
-
-            elif mode == "multiview":
-                self.signals.log.emit(f"Uploading {len(payload['images'])} images...\n")
-                tokens = []
-                for i, img_path in enumerate(payload["images"]):
-                    self.signals.log.emit(f"  Uploading {i+1}/{len(payload['images'])}: {os.path.basename(img_path)}\n")
-                    token = client.upload_image(img_path)
-                    tokens.append(token)
-
-                self.signals.log.emit("Creating multiview-to-3D task...\n")
-                files = [{"type": "image_token", "file_token": t} for t in tokens]
-                params = {"files": files}
-                task_id = client.create_task("multiview_to_model", params)
-
-            elif mode == "text":
-                self.signals.log.emit(f"Creating text-to-3D task...\n")
-                self.signals.log.emit(f"  Prompt: {payload['prompt']}\n")
-                params = {"prompt": payload["prompt"]}
-                task_id = client.create_task("text_to_model", params)
-
-            # Poll
-            self.signals.log.emit(f"Task ID: {task_id}\nWaiting for generation...\n\n")
-            import time
-            import requests
-            start = time.time()
-
-            while True:
-                elapsed = time.time() - start
-                if elapsed > timeout:
-                    self.signals.finished.emit(False, f"Timed out after {timeout}s")
-                    return
-
-                resp = client.session.get(
-                    f"https://api.tripo3d.ai/v2/openapi/task/{task_id}"
-                )
-                resp.raise_for_status()
-                data = resp.json()
-
-                if data.get("code") != 0:
-                    self.signals.finished.emit(False, f"Poll error: {data.get('message')}")
-                    return
-
-                task_data = data["data"]
-                status = task_data.get("status", "unknown")
-                progress = task_data.get("progress", 0)
-
+            def progress_callback(progress, status):
                 self.signals.progress.emit(progress, status)
 
-                if status == "success":
-                    self.signals.log.emit("\nGeneration complete! Downloading...\n")
-                    client.download_model(task_data, output, fmt)
-                    self.signals.log.emit(f"\n✓ Saved: {output}\n")
-                    self.signals.finished.emit(True, output)
-                    return
+            if mode == "single":
+                self.signals.log.emit("Starting image-to-3D...\n")
+                client.image_to_3d(payload["image"], output, fmt, progress_callback)
+            elif mode == "multiview":
+                self.signals.log.emit(f"Starting multiview-to-3D ({len(payload['images'])} images)...\n")
+                client.multiview_to_3d(payload["images"], output, fmt, progress_callback)
+            elif mode == "text":
+                self.signals.log.emit(f"Starting text-to-3D...\n")
+                client.text_to_3d(payload["prompt"], output, fmt, progress_callback)
 
-                if status in ("failed", "cancelled", "unknown"):
-                    msg = task_data.get("message", "No details")
-                    self.signals.finished.emit(False, f"Task {status}: {msg}")
-                    return
-
-                time.sleep(3)
+            self.signals.log.emit(f"\n✓ Saved: {output}\n")
+            self.signals.finished.emit(True, output)
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             self.signals.finished.emit(False, str(e))
 
-    # --------------------------------------------------------- Callbacks
     def _on_progress(self, percent, status):
         self.progress_bar.setValue(percent)
         self.status_label.setText(f"{status} — {percent}%")
@@ -561,12 +419,9 @@ class TripoGUI(QMainWindow):
         else:
             self.status_label.setText(f"✗ {message}")
             self.status_label.setStyleSheet("color: #e55; font-size: 12px;")
-            self.statusBar().showMessage("✗ Generation failed")
             self._on_log(f"\n✗ Error: {message}\n")
 
-    # --------------------------------------------------------- Settings
     def _save_settings(self):
-        # Save key only if user explicitly typed one
         key = self.api_key_input.text().strip()
         if key:
             self.settings.setValue("api_key", key)

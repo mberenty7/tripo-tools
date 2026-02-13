@@ -1,38 +1,35 @@
 """
-Tripo AI — Web Interface (Gradio)
-
-A web-based alternative to tripo_gui.py.
+Tripo Tools Web Interface (Gradio).
 
 Usage:
-    python tripo_web.py
-
-    # With custom port
-    python tripo_web.py --port 7860
-
-    # Public share link (temporary)
-    python tripo_web.py --share
-
-Requirements:
-    pip install gradio requests
+    tripo-web
+    tripo-web --port 8080
+    tripo-web --share
 """
 
+import argparse
 import os
 import sys
-import argparse
 import tempfile
 from pathlib import Path
 
 try:
     import gradio as gr
 except ImportError:
-    print("Gradio not installed. Run: pip install gradio")
-    sys.exit(1)
+    gr = None
 
-# Import the client from tripo_generate
-from tripo_generate import TripoClient, TASK_TEXT_TO_MODEL, TASK_IMAGE_TO_MODEL
+from .client import TripoClient
 
 
-def generate_from_image(image_path, output_format, api_key, progress=gr.Progress()):
+def check_gradio():
+    """Check if Gradio is installed."""
+    if gr is None:
+        print("Gradio not installed. Run: pip install gradio")
+        print("Or install with web support: pip install tripo-tools[web]")
+        sys.exit(1)
+
+
+def generate_from_image(image_path, output_format, api_key, progress=None):
     """Generate 3D model from a single image."""
     if not api_key:
         return None, "❌ Error: API key required"
@@ -43,34 +40,28 @@ def generate_from_image(image_path, output_format, api_key, progress=gr.Progress
     try:
         client = TripoClient(api_key)
         
-        # Upload image
-        progress(0.1, desc="Uploading image...")
-        image_token = client.upload_image(image_path)
+        if progress:
+            progress(0.1, desc="Uploading image...")
         
-        # Create task
-        progress(0.2, desc="Creating task...")
-        params = {
-            "file": {"type": "image_token", "file_token": image_token},
-        }
-        task_id = client.create_task(TASK_IMAGE_TO_MODEL, params)
-        
-        # Poll for completion
-        progress(0.3, desc="Generating 3D model...")
-        task_data = poll_with_progress(client, task_id, progress, start=0.3, end=0.9)
-        
-        # Download
-        progress(0.9, desc="Downloading model...")
         output_path = tempfile.mktemp(suffix=f".{output_format}")
-        client.download_model(task_data, output_path, output_format)
         
-        progress(1.0, desc="Done!")
+        def callback(prog, status):
+            if progress:
+                mapped = 0.1 + 0.8 * (prog / 100)
+                progress(mapped, desc=f"Generating... {prog}%")
+        
+        client.image_to_3d(image_path, output_path, output_format, callback)
+        
+        if progress:
+            progress(1.0, desc="Done!")
+        
         return output_path, f"✅ Success! Generated {Path(output_path).name}"
     
     except Exception as e:
         return None, f"❌ Error: {str(e)}"
 
 
-def generate_from_text(prompt, output_format, api_key, progress=gr.Progress()):
+def generate_from_text(prompt, output_format, api_key, progress=None):
     """Generate 3D model from text prompt."""
     if not api_key:
         return None, "❌ Error: API key required"
@@ -81,28 +72,28 @@ def generate_from_text(prompt, output_format, api_key, progress=gr.Progress()):
     try:
         client = TripoClient(api_key)
         
-        # Create task
-        progress(0.1, desc="Creating task...")
-        params = {"prompt": prompt.strip()}
-        task_id = client.create_task(TASK_TEXT_TO_MODEL, params)
+        if progress:
+            progress(0.1, desc="Creating task...")
         
-        # Poll for completion
-        progress(0.2, desc="Generating 3D model...")
-        task_data = poll_with_progress(client, task_id, progress, start=0.2, end=0.9)
-        
-        # Download
-        progress(0.9, desc="Downloading model...")
         output_path = tempfile.mktemp(suffix=f".{output_format}")
-        client.download_model(task_data, output_path, output_format)
         
-        progress(1.0, desc="Done!")
+        def callback(prog, status):
+            if progress:
+                mapped = 0.1 + 0.8 * (prog / 100)
+                progress(mapped, desc=f"Generating... {prog}%")
+        
+        client.text_to_3d(prompt.strip(), output_path, output_format, callback)
+        
+        if progress:
+            progress(1.0, desc="Done!")
+        
         return output_path, f"✅ Success! Generated {Path(output_path).name}"
     
     except Exception as e:
         return None, f"❌ Error: {str(e)}"
 
 
-def generate_from_multiview(front, back, left, right, output_format, api_key, progress=gr.Progress()):
+def generate_from_multiview(front, back, left, right, output_format, api_key, progress=None):
     """Generate 3D model from 4 views."""
     if not api_key:
         return None, "❌ Error: API key required"
@@ -114,71 +105,25 @@ def generate_from_multiview(front, back, left, right, output_format, api_key, pr
     try:
         client = TripoClient(api_key)
         
-        # Upload all images
-        progress(0.1, desc="Uploading images...")
-        tokens = []
-        for i, img_path in enumerate(images):
-            progress(0.1 + (i * 0.1), desc=f"Uploading image {i+1}/4...")
-            token = client.upload_image(img_path)
-            tokens.append(token)
+        if progress:
+            progress(0.1, desc="Uploading images...")
         
-        # Create multiview task
-        progress(0.5, desc="Creating multiview task...")
-        params = {
-            "files": [
-                {"type": "image_token", "file_token": t} for t in tokens
-            ],
-        }
-        task_id = client.create_task("multiview_to_model", params)
-        
-        # Poll for completion
-        progress(0.6, desc="Generating 3D model...")
-        task_data = poll_with_progress(client, task_id, progress, start=0.6, end=0.9)
-        
-        # Download
-        progress(0.9, desc="Downloading model...")
         output_path = tempfile.mktemp(suffix=f".{output_format}")
-        client.download_model(task_data, output_path, output_format)
         
-        progress(1.0, desc="Done!")
+        def callback(prog, status):
+            if progress:
+                mapped = 0.2 + 0.7 * (prog / 100)
+                progress(mapped, desc=f"Generating... {prog}%")
+        
+        client.multiview_to_3d(images, output_path, output_format, callback)
+        
+        if progress:
+            progress(1.0, desc="Done!")
+        
         return output_path, f"✅ Success! Generated {Path(output_path).name}"
     
     except Exception as e:
         return None, f"❌ Error: {str(e)}"
-
-
-def poll_with_progress(client, task_id, progress, start=0.2, end=0.9, poll_interval=3, timeout=600):
-    """Poll task with Gradio progress updates."""
-    import time
-    start_time = time.time()
-    
-    while True:
-        elapsed = time.time() - start_time
-        if elapsed > timeout:
-            raise TimeoutError(f"Task timed out after {timeout}s")
-        
-        resp = client.session.get(f"https://api.tripo3d.ai/v2/openapi/task/{task_id}")
-        resp.raise_for_status()
-        data = resp.json()
-        
-        if data.get("code") != 0:
-            raise RuntimeError(f"Poll failed: {data.get('message', data)}")
-        
-        task_data = data["data"]
-        status = task_data.get("status")
-        task_progress = task_data.get("progress", 0)
-        
-        # Map task progress (0-100) to our progress range (start-end)
-        mapped_progress = start + (end - start) * (task_progress / 100)
-        progress(mapped_progress, desc=f"Generating... {task_progress}%")
-        
-        if status == "success":
-            return task_data
-        
-        if status in ("failed", "cancelled", "unknown"):
-            raise RuntimeError(f"Task {status}: {task_data.get('message', 'no details')}")
-        
-        time.sleep(poll_interval)
 
 
 def check_balance(api_key):
@@ -196,6 +141,7 @@ def check_balance(api_key):
 
 def build_interface():
     """Build the Gradio interface."""
+    check_gradio()
     
     with gr.Blocks(title="Tripo 3D Generator", theme=gr.themes.Soft()) as demo:
         gr.Markdown("""
@@ -312,6 +258,7 @@ def main():
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
     args = parser.parse_args()
     
+    check_gradio()
     demo = build_interface()
     
     print(f"\n🚀 Starting Tripo Web Interface")

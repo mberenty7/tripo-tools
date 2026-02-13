@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tripo-tools"
+version = "0.1.0"
+description = "Image-to-3D and Text-to-3D generation using Tripo AI"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Obsolete Robot", email = "hello@obsoleterobot.com"}
+]
+keywords = ["3d", "ai", "tripo", "image-to-3d", "text-to-3d", "game-assets"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.25.0",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.4.0"]
+web = ["gradio>=4.0.0"]
+all = ["PySide6>=6.4.0", "gradio>=4.0.0"]
+
+[project.scripts]
+tripo = "tripo_tools.cli:main"
+tripo-web = "tripo_tools.web:main"
+tripo-gui = "tripo_tools.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/Obsolete-Robot/tripo-tools"
+Repository = "https://github.com/Obsolete-Robot/tripo-tools"
+Issues = "https://github.com/Obsolete-Robot/tripo-tools/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
