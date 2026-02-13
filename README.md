@@ -44,7 +44,25 @@ python tripo_generate.py --balance
 
 GLB, FBX, OBJ, STL, USDZ
 
+### Web Interface (Gradio)
+```bash
+# Install Gradio
+pip install gradio
+
+# Run web interface
+python tripo_web.py
+
+# Custom port
+python tripo_web.py --port 8080
+
+# Public share link (temporary)
+python tripo_web.py --share
+```
+
+Open http://localhost:7860 in your browser. Supports all three modes (image, multiview, text) with progress tracking.
+
 ## Files
 
-- `tripo_gui.py` — PySide6 GUI application
+- `tripo_gui.py` — PySide6 GUI application (desktop)
+- `tripo_web.py` — Gradio web interface (browser)
 - `tripo_generate.py` — CLI script and Tripo API client
