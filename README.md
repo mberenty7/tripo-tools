@@ -108,7 +108,7 @@ client.image_to_3d("photo.png", "model.glb", callback=on_progress)
 - **STL** — 3D printing
 - **USDZ** — Apple AR
 
-#Installing Tripo-Tools with Non-Default Python
+## Installing Tripo-Tools with Non-Default Python
 
 If you have multiple Python versions installed, or Python isn't in your PATH, use the `py` launcher to target a specific version. **THIS IS IMPORTANT IF YOUR PATHED PYTHON IS BELOW 3.9**
 
