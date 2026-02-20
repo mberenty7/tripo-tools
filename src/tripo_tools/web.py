@@ -18,7 +18,7 @@ try:
 except ImportError:
     gr = None
 
-from .client import TripoClient
+from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
 
 
 def check_gradio():
@@ -29,7 +29,9 @@ def check_gradio():
         sys.exit(1)
 
 
-def generate_from_image(image_path, output_format, api_key, progress=None):
+def generate_from_image(image_path, output_format, api_key, 
+                        model_version, texture, pbr, face_limit, seed, quad, auto_size,
+                        progress=None):
     """Generate 3D model from a single image."""
     if not api_key:
         return None, "❌ Error: API key required"
@@ -50,7 +52,20 @@ def generate_from_image(image_path, output_format, api_key, progress=None):
                 mapped = 0.1 + 0.8 * (prog / 100)
                 progress(mapped, desc=f"Generating... {prog}%")
         
-        client.image_to_3d(image_path, output_path, output_format, callback)
+        # Parse face_limit
+        fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+        sd = int(seed) if seed and str(seed).strip() else None
+        
+        client.image_to_3d(
+            image_path, output_path, output_format, callback,
+            model_version=model_version if model_version != "default" else None,
+            texture=texture,
+            pbr=pbr,
+            face_limit=fl,
+            seed=sd,
+            quad=quad,
+            auto_size=auto_size
+        )
         
         if progress:
             progress(1.0, desc="Done!")
@@ -61,7 +76,9 @@ def generate_from_image(image_path, output_format, api_key, progress=None):
         return None, f"❌ Error: {str(e)}"
 
 
-def generate_from_text(prompt, output_format, api_key, progress=None):
+def generate_from_text(prompt, output_format, api_key,
+                       model_version, texture, pbr, face_limit, seed, quad, auto_size,
+                       progress=None):
     """Generate 3D model from text prompt."""
     if not api_key:
         return None, "❌ Error: API key required"
@@ -82,7 +99,20 @@ def generate_from_text(prompt, output_format, api_key, progress=None):
                 mapped = 0.1 + 0.8 * (prog / 100)
                 progress(mapped, desc=f"Generating... {prog}%")
         
-        client.text_to_3d(prompt.strip(), output_path, output_format, callback)
+        # Parse face_limit
+        fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+        sd = int(seed) if seed and str(seed).strip() else None
+        
+        client.text_to_3d(
+            prompt.strip(), output_path, output_format, callback,
+            model_version=model_version if model_version != "default" else None,
+            texture=texture,
+            pbr=pbr,
+            face_limit=fl,
+            seed=sd,
+            quad=quad,
+            auto_size=auto_size
+        )
         
         if progress:
             progress(1.0, desc="Done!")
@@ -93,7 +123,9 @@ def generate_from_text(prompt, output_format, api_key, progress=None):
         return None, f"❌ Error: {str(e)}"
 
 
-def generate_from_multiview(front, back, left, right, output_format, api_key, progress=None):
+def generate_from_multiview(front, back, left, right, output_format, api_key,
+                            model_version, texture, pbr, face_limit, seed, quad, auto_size,
+                            progress=None):
     """Generate 3D model from 4 views."""
     if not api_key:
         return None, "❌ Error: API key required"
@@ -115,7 +147,20 @@ def generate_from_multiview(front, back, left, right, output_format, api_key, pr
                 mapped = 0.2 + 0.7 * (prog / 100)
                 progress(mapped, desc=f"Generating... {prog}%")
         
-        client.multiview_to_3d(images, output_path, output_format, callback)
+        # Parse face_limit
+        fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+        sd = int(seed) if seed and str(seed).strip() else None
+        
+        client.multiview_to_3d(
+            images, output_path, output_format, callback,
+            model_version=model_version if model_version != "default" else None,
+            texture=texture,
+            pbr=pbr,
+            face_limit=fl,
+            seed=sd,
+            quad=quad,
+            auto_size=auto_size
+        )
         
         if progress:
             progress(1.0, desc="Done!")
@@ -162,12 +207,41 @@ def build_interface():
         
         balance_btn.click(check_balance, inputs=[api_key], outputs=[balance_out])
         
-        # Output format (shared)
-        output_format = gr.Radio(
-            choices=["glb", "fbx", "obj", "stl", "usdz"],
-            value="glb",
-            label="Output Format",
-        )
+        # Shared settings
+        with gr.Accordion("Generation Settings", open=False):
+            with gr.Row():
+                model_version = gr.Dropdown(
+                    choices=["default"] + MODEL_VERSIONS,
+                    value="default",
+                    label="Model Version",
+                )
+                texture = gr.Dropdown(
+                    choices=TEXTURE_OPTIONS,
+                    value="standard",
+                    label="Texture Quality",
+                )
+                output_format = gr.Radio(
+                    choices=["glb", "fbx", "obj", "stl", "usdz"],
+                    value="glb",
+                    label="Output Format",
+                )
+            
+            with gr.Row():
+                pbr = gr.Checkbox(value=True, label="PBR Materials")
+                quad = gr.Checkbox(value=False, label="Quad Mesh (extra cost)")
+                auto_size = gr.Checkbox(value=False, label="Auto Scale (real-world size)")
+            
+            with gr.Row():
+                face_limit = gr.Textbox(
+                    label="Face Limit (optional)",
+                    placeholder="e.g., 10000",
+                    value="",
+                )
+                seed = gr.Textbox(
+                    label="Seed (optional)",
+                    placeholder="e.g., 12345",
+                    value="",
+                )
         
         with gr.Tabs():
             # Tab 1: Image to 3D
@@ -189,7 +263,8 @@ def build_interface():
                 
                 image_btn.click(
                     generate_from_image,
-                    inputs=[image_input, output_format, api_key],
+                    inputs=[image_input, output_format, api_key,
+                            model_version, texture, pbr, face_limit, seed, quad, auto_size],
                     outputs=[image_output, image_status],
                 )
             
@@ -212,7 +287,8 @@ def build_interface():
                 
                 text_btn.click(
                     generate_from_text,
-                    inputs=[prompt_input, output_format, api_key],
+                    inputs=[prompt_input, output_format, api_key,
+                            model_version, texture, pbr, face_limit, seed, quad, auto_size],
                     outputs=[text_output, text_status],
                 )
             
@@ -235,17 +311,20 @@ def build_interface():
                 
                 multi_btn.click(
                     generate_from_multiview,
-                    inputs=[front_img, back_img, left_img, right_img, output_format, api_key],
+                    inputs=[front_img, back_img, left_img, right_img, output_format, api_key,
+                            model_version, texture, pbr, face_limit, seed, quad, auto_size],
                     outputs=[multi_output, multi_status],
                 )
         
         gr.Markdown("""
         ---
-        **Tips:**
-        - GLB format is best for web/game engines
-        - Single image works well for simple objects
-        - Multiview gives better geometry for complex shapes
-        - Get your API key at [tripo3d.ai](https://tripo3d.ai)
+        **Settings Guide:**
+        - **Model Version**: Newer = better quality, Turbo = faster
+        - **Texture**: HD costs more but higher quality
+        - **PBR**: Physically-based rendering materials (recommended)
+        - **Quad Mesh**: Cleaner topology for animation (extra cost)
+        - **Face Limit**: Control polygon count for optimization
+        - **Seed**: Use same seed for reproducible results
         """)
     
     return demo

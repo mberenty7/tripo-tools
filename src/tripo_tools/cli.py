@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from .client import TripoClient
+from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
 
 
 def print_progress(progress, status):
@@ -33,6 +33,7 @@ Examples:
     tripo --image photo.png --output model.glb
     tripo --prompt "a wooden barrel" --output barrel.glb
     tripo --multiview f.png b.png l.png r.png --output model.glb
+    tripo --image photo.png -o model.glb --model-version v2.5-20250123 --texture HD
     tripo --balance
         """
     )
@@ -52,7 +53,25 @@ Examples:
                         choices=["glb", "fbx", "obj", "stl", "usdz"],
                         help="Output format (default: glb)")
 
-    # Options
+    # Model options
+    parser.add_argument("--model-version", "-mv",
+                        choices=MODEL_VERSIONS,
+                        help="Model version to use")
+    parser.add_argument("--texture", "-tx",
+                        choices=TEXTURE_OPTIONS, default="standard",
+                        help="Texture quality (default: standard)")
+    parser.add_argument("--no-pbr", action="store_true",
+                        help="Disable PBR materials")
+    parser.add_argument("--face-limit", "-fl", type=int,
+                        help="Maximum number of faces")
+    parser.add_argument("--seed", "-s", type=int,
+                        help="Seed for reproducible generation")
+    parser.add_argument("--quad", action="store_true",
+                        help="Generate quad mesh (extra cost)")
+    parser.add_argument("--auto-size", action="store_true",
+                        help="Auto-scale to real-world dimensions")
+
+    # General options
     parser.add_argument("--api-key", "-k",
                         help="Tripo API key (or set TRIPO_API_KEY env var)")
     parser.add_argument("--timeout", "-t", type=int, default=600,
@@ -132,15 +151,28 @@ Examples:
 
     print(f"[tripo] Mode: {mode}")
     print(f"[tripo] Output: {output_path}")
+    if args.model_version:
+        print(f"[tripo] Model: {args.model_version}")
+    print(f"[tripo] Texture: {args.texture}, PBR: {not args.no_pbr}")
     print()
 
     try:
+        common_args = {
+            "model_version": args.model_version,
+            "texture": args.texture,
+            "pbr": not args.no_pbr,
+            "face_limit": args.face_limit,
+            "seed": args.seed,
+            "quad": args.quad,
+            "auto_size": args.auto_size,
+        }
+        
         if args.image:
-            client.image_to_3d(args.image, output_path, args.format, callback)
+            client.image_to_3d(args.image, output_path, args.format, callback, **common_args)
         elif args.prompt:
-            client.text_to_3d(args.prompt, output_path, args.format, callback)
+            client.text_to_3d(args.prompt, output_path, args.format, callback, **common_args)
         else:
-            client.multiview_to_3d(args.multiview, output_path, args.format, callback)
+            client.multiview_to_3d(args.multiview, output_path, args.format, callback, **common_args)
 
         print(f"\n[tripo] ✓ Done! Saved to {output_path}")
         return 0
