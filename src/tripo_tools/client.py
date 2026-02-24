@@ -6,9 +6,13 @@ The core client for interacting with Tripo's 3D generation API.
 
 import os
 import time
+import json
+import logging
 import requests
 
 API_BASE = "https://api.tripo3d.ai/v2/openapi"
+
+logger = logging.getLogger("tripo_tools")
 
 # Task types
 TASK_IMAGE_TO_MODEL = "image_to_model"
@@ -49,28 +53,52 @@ class TripoClient:
 
     def upload_image(self, image_path):
         """Upload an image file and get an image token."""
+        file_size = os.path.getsize(image_path)
+        logger.info(f"Uploading: {image_path} ({file_size} bytes)")
+        
         with open(image_path, "rb") as f:
             resp = self.session.post(
                 f"{API_BASE}/upload",
                 files={"file": (os.path.basename(image_path), f)},
             )
 
+        logger.info(f"Upload response: {resp.status_code}")
         resp.raise_for_status()
         data = resp.json()
 
         if data.get("code") != 0:
             raise RuntimeError(f"Upload failed: {data.get('message', data)}")
 
-        return data["data"]["image_token"]
+        token = data["data"]["image_token"]
+        logger.info(f"Image token: {token[:20]}...")
+        return token
 
     def create_task(self, task_type, params):
         """Create a generation task."""
         body = {"type": task_type, **params}
 
+        # Log the full request for debugging
+        log_body = {k: v for k, v in body.items()}
+        # Redact file tokens for cleaner logs
+        if "file" in log_body and isinstance(log_body["file"], dict):
+            log_body["file"] = {**log_body["file"], "file_token": log_body["file"].get("file_token", "")[:20] + "..."}
+        if "files" in log_body and isinstance(log_body["files"], list):
+            log_body["files"] = [{"type": f.get("type"), "file_token": f.get("file_token", "")[:20] + "..."} for f in log_body["files"]]
+        
+        logger.info(f"POST {API_BASE}/task")
+        logger.info(f"Request body: {json.dumps(log_body, indent=2)}")
+
         resp = self.session.post(
             f"{API_BASE}/task",
             json=body,
         )
+
+        logger.info(f"Response: {resp.status_code}")
+        try:
+            resp_data = resp.json()
+            logger.info(f"Response body: {json.dumps(resp_data, indent=2)}")
+        except Exception:
+            logger.info(f"Response text: {resp.text[:1000]}")
 
         resp.raise_for_status()
         data = resp.json()

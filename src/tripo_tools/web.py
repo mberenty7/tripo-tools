@@ -10,7 +10,9 @@ Usage:
 import argparse
 import os
 import sys
+import logging
 import tempfile
+from io import StringIO
 from pathlib import Path
 
 try:
@@ -19,6 +21,26 @@ except ImportError:
     gr = None
 
 from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
+
+
+class LogCapture:
+    """Context manager to capture tripo_tools log output to a string."""
+    def __init__(self):
+        self.buffer = StringIO()
+        self.handler = logging.StreamHandler(self.buffer)
+        self.handler.setFormatter(logging.Formatter("[%(asctime)s] %(message)s", datefmt="%H:%M:%S"))
+        self.logger = logging.getLogger("tripo_tools")
+
+    def __enter__(self):
+        self.logger.addHandler(self.handler)
+        self.logger.setLevel(logging.DEBUG)
+        return self
+
+    def __exit__(self, *args):
+        self.logger.removeHandler(self.handler)
+
+    def get_log(self):
+        return self.buffer.getvalue()
 
 
 def check_gradio():
@@ -34,46 +56,46 @@ def generate_from_image(image_path, output_format, api_key,
                         progress=None):
     """Generate 3D model from a single image."""
     if not api_key:
-        return None, "❌ Error: API key required"
+        return None, "❌ Error: API key required", ""
     
     if not image_path:
-        return None, "❌ Error: Please upload an image"
+        return None, "❌ Error: Please upload an image", ""
     
-    try:
-        client = TripoClient(api_key)
-        
-        if progress:
-            progress(0.1, desc="Uploading image...")
-        
-        output_path = tempfile.mktemp(suffix=f".{output_format}")
-        
-        def callback(prog, status):
+    with LogCapture() as log:
+        try:
+            client = TripoClient(api_key)
+            
             if progress:
-                mapped = 0.1 + 0.8 * (prog / 100)
-                progress(mapped, desc=f"Generating... {prog}%")
+                progress(0.1, desc="Uploading image...")
+            
+            output_path = tempfile.mktemp(suffix=f".{output_format}")
+            
+            def callback(prog, status):
+                if progress:
+                    mapped = 0.1 + 0.8 * (prog / 100)
+                    progress(mapped, desc=f"Generating... {prog}%")
+            
+            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+            sd = int(seed) if seed and str(seed).strip() else None
+            
+            client.image_to_3d(
+                image_path, output_path, output_format, callback,
+                model_version=model_version if model_version != "default" else None,
+                texture=texture,
+                pbr=pbr,
+                face_limit=fl,
+                seed=sd,
+                quad=quad,
+                auto_size=auto_size
+            )
+            
+            if progress:
+                progress(1.0, desc="Done!")
+            
+            return output_path, f"✅ Success! Generated {Path(output_path).name}", log.get_log()
         
-        # Parse face_limit
-        fl = int(face_limit) if face_limit and str(face_limit).strip() else None
-        sd = int(seed) if seed and str(seed).strip() else None
-        
-        client.image_to_3d(
-            image_path, output_path, output_format, callback,
-            model_version=model_version if model_version != "default" else None,
-            texture=texture,
-            pbr=pbr,
-            face_limit=fl,
-            seed=sd,
-            quad=quad,
-            auto_size=auto_size
-        )
-        
-        if progress:
-            progress(1.0, desc="Done!")
-        
-        return output_path, f"✅ Success! Generated {Path(output_path).name}"
-    
-    except Exception as e:
-        return None, f"❌ Error: {str(e)}"
+        except Exception as e:
+            return None, f"❌ Error: {str(e)}", log.get_log()
 
 
 def generate_from_text(prompt, output_format, api_key,
@@ -81,46 +103,46 @@ def generate_from_text(prompt, output_format, api_key,
                        progress=None):
     """Generate 3D model from text prompt."""
     if not api_key:
-        return None, "❌ Error: API key required"
+        return None, "❌ Error: API key required", ""
     
     if not prompt or not prompt.strip():
-        return None, "❌ Error: Please enter a prompt"
+        return None, "❌ Error: Please enter a prompt", ""
     
-    try:
-        client = TripoClient(api_key)
-        
-        if progress:
-            progress(0.1, desc="Creating task...")
-        
-        output_path = tempfile.mktemp(suffix=f".{output_format}")
-        
-        def callback(prog, status):
+    with LogCapture() as log:
+        try:
+            client = TripoClient(api_key)
+            
             if progress:
-                mapped = 0.1 + 0.8 * (prog / 100)
-                progress(mapped, desc=f"Generating... {prog}%")
+                progress(0.1, desc="Creating task...")
+            
+            output_path = tempfile.mktemp(suffix=f".{output_format}")
+            
+            def callback(prog, status):
+                if progress:
+                    mapped = 0.1 + 0.8 * (prog / 100)
+                    progress(mapped, desc=f"Generating... {prog}%")
+            
+            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+            sd = int(seed) if seed and str(seed).strip() else None
+            
+            client.text_to_3d(
+                prompt.strip(), output_path, output_format, callback,
+                model_version=model_version if model_version != "default" else None,
+                texture=texture,
+                pbr=pbr,
+                face_limit=fl,
+                seed=sd,
+                quad=quad,
+                auto_size=auto_size
+            )
+            
+            if progress:
+                progress(1.0, desc="Done!")
+            
+            return output_path, f"✅ Success! Generated {Path(output_path).name}", log.get_log()
         
-        # Parse face_limit
-        fl = int(face_limit) if face_limit and str(face_limit).strip() else None
-        sd = int(seed) if seed and str(seed).strip() else None
-        
-        client.text_to_3d(
-            prompt.strip(), output_path, output_format, callback,
-            model_version=model_version if model_version != "default" else None,
-            texture=texture,
-            pbr=pbr,
-            face_limit=fl,
-            seed=sd,
-            quad=quad,
-            auto_size=auto_size
-        )
-        
-        if progress:
-            progress(1.0, desc="Done!")
-        
-        return output_path, f"✅ Success! Generated {Path(output_path).name}"
-    
-    except Exception as e:
-        return None, f"❌ Error: {str(e)}"
+        except Exception as e:
+            return None, f"❌ Error: {str(e)}", log.get_log()
 
 
 def generate_from_multiview(front, back, left, right, output_format, api_key,
@@ -128,47 +150,47 @@ def generate_from_multiview(front, back, left, right, output_format, api_key,
                             progress=None):
     """Generate 3D model from 4 views."""
     if not api_key:
-        return None, "❌ Error: API key required"
+        return None, "❌ Error: API key required", ""
     
     images = [front, back, left, right]
     if not all(images):
-        return None, "❌ Error: All 4 views required (front, back, left, right)"
+        return None, "❌ Error: All 4 views required (front, back, left, right)", ""
     
-    try:
-        client = TripoClient(api_key)
-        
-        if progress:
-            progress(0.1, desc="Uploading images...")
-        
-        output_path = tempfile.mktemp(suffix=f".{output_format}")
-        
-        def callback(prog, status):
+    with LogCapture() as log:
+        try:
+            client = TripoClient(api_key)
+            
             if progress:
-                mapped = 0.2 + 0.7 * (prog / 100)
-                progress(mapped, desc=f"Generating... {prog}%")
+                progress(0.1, desc="Uploading images...")
+            
+            output_path = tempfile.mktemp(suffix=f".{output_format}")
+            
+            def callback(prog, status):
+                if progress:
+                    mapped = 0.2 + 0.7 * (prog / 100)
+                    progress(mapped, desc=f"Generating... {prog}%")
+            
+            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+            sd = int(seed) if seed and str(seed).strip() else None
+            
+            client.multiview_to_3d(
+                images, output_path, output_format, callback,
+                model_version=model_version if model_version != "default" else None,
+                texture=texture,
+                pbr=pbr,
+                face_limit=fl,
+                seed=sd,
+                quad=quad,
+                auto_size=auto_size
+            )
+            
+            if progress:
+                progress(1.0, desc="Done!")
+            
+            return output_path, f"✅ Success! Generated {Path(output_path).name}", log.get_log()
         
-        # Parse face_limit
-        fl = int(face_limit) if face_limit and str(face_limit).strip() else None
-        sd = int(seed) if seed and str(seed).strip() else None
-        
-        client.multiview_to_3d(
-            images, output_path, output_format, callback,
-            model_version=model_version if model_version != "default" else None,
-            texture=texture,
-            pbr=pbr,
-            face_limit=fl,
-            seed=sd,
-            quad=quad,
-            auto_size=auto_size
-        )
-        
-        if progress:
-            progress(1.0, desc="Done!")
-        
-        return output_path, f"✅ Success! Generated {Path(output_path).name}"
-    
-    except Exception as e:
-        return None, f"❌ Error: {str(e)}"
+        except Exception as e:
+            return None, f"❌ Error: {str(e)}", log.get_log()
 
 
 def check_balance(api_key):
@@ -261,11 +283,13 @@ def build_interface():
                         image_output = gr.File(label="Download Model")
                         image_status = gr.Textbox(label="Status", interactive=False)
                 
+                image_log = gr.Textbox(label="Debug Log", interactive=False, lines=8, max_lines=20)
+                
                 image_btn.click(
                     generate_from_image,
                     inputs=[image_input, output_format, api_key,
                             model_version, texture, pbr, face_limit, seed, quad, auto_size],
-                    outputs=[image_output, image_status],
+                    outputs=[image_output, image_status, image_log],
                 )
             
             # Tab 2: Text to 3D
@@ -285,11 +309,13 @@ def build_interface():
                         text_output = gr.File(label="Download Model")
                         text_status = gr.Textbox(label="Status", interactive=False)
                 
+                text_log = gr.Textbox(label="Debug Log", interactive=False, lines=8, max_lines=20)
+                
                 text_btn.click(
                     generate_from_text,
                     inputs=[prompt_input, output_format, api_key,
                             model_version, texture, pbr, face_limit, seed, quad, auto_size],
-                    outputs=[text_output, text_status],
+                    outputs=[text_output, text_status, text_log],
                 )
             
             # Tab 3: Multiview to 3D
@@ -309,11 +335,13 @@ def build_interface():
                         multi_output = gr.File(label="Download Model")
                         multi_status = gr.Textbox(label="Status", interactive=False)
                 
+                multi_log = gr.Textbox(label="Debug Log", interactive=False, lines=8, max_lines=20)
+                
                 multi_btn.click(
                     generate_from_multiview,
                     inputs=[front_img, back_img, left_img, right_img, output_format, api_key,
                             model_version, texture, pbr, face_limit, seed, quad, auto_size],
-                    outputs=[multi_output, multi_status],
+                    outputs=[multi_output, multi_status, multi_log],
                 )
         
         gr.Markdown("""

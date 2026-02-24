@@ -8,6 +8,7 @@ Usage:
 import sys
 import os
 import json
+import logging
 import threading
 from pathlib import Path
 
@@ -29,6 +30,21 @@ from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
 
 OUTPUT_FORMATS = ["glb", "fbx", "obj", "stl", "usdz"]
 SUPPORTED_IMAGES = "Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"
+
+
+class QSignalLogHandler(logging.Handler):
+    """Logging handler that emits to a Qt signal."""
+    def __init__(self, signal_fn):
+        super().__init__()
+        self.signal_fn = signal_fn
+        self.setFormatter(logging.Formatter("[%(asctime)s] %(message)s", datefmt="%H:%M:%S"))
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.signal_fn(msg + "\n")
+        except Exception:
+            pass
 
 
 class WorkerSignals(QObject):
@@ -121,6 +137,12 @@ class TripoGUI(QMainWindow):
         self.signals.log.connect(self._on_log)
         self.signals.finished.connect(self._on_finished)
         self.signals.balance.connect(self._on_balance)
+
+        # Hook up tripo_tools logger to GUI log panel
+        self._log_handler = QSignalLogHandler(self.signals.log.emit)
+        tripo_logger = logging.getLogger("tripo_tools")
+        tripo_logger.addHandler(self._log_handler)
+        tripo_logger.setLevel(logging.DEBUG)
 
         self._build_ui()
         self._load_settings()
