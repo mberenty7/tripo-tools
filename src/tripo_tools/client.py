@@ -63,6 +63,8 @@ class TripoClient:
             )
 
         logger.info(f"Upload response: {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"Upload failed: {resp.status_code} {resp.text[:1000]}")
         resp.raise_for_status()
         data = resp.json()
 
@@ -100,6 +102,8 @@ class TripoClient:
         except Exception:
             logger.info(f"Response text: {resp.text[:1000]}")
 
+        if resp.status_code != 200:
+            logger.error(f"Task creation failed with HTTP {resp.status_code}")
         resp.raise_for_status()
         data = resp.json()
 

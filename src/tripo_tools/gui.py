@@ -471,31 +471,44 @@ class TripoGUI(QMainWindow):
 
     def _generate_worker(self, api_key, mode, payload, output, fmt, timeout, gen_options=None):
         try:
-            client = TripoClient(api_key)
             opts = gen_options or {}
+
+            # Log everything up front
+            self.signals.log.emit(f"=== Tripo Debug Log ===\n")
+            self.signals.log.emit(f"Mode: {mode}\n")
+            self.signals.log.emit(f"Output: {output} (format: {fmt})\n")
+            self.signals.log.emit(f"API Key: {api_key[:8]}...{api_key[-4:]}\n")
+            self.signals.log.emit(f"Options: {json.dumps(opts, indent=2)}\n\n")
+
+            if mode == "single":
+                self.signals.log.emit(f"Image: {payload['image']}\n")
+            elif mode == "multiview":
+                self.signals.log.emit(f"Images: {payload['images']}\n")
+            elif mode == "text":
+                self.signals.log.emit(f"Prompt: {payload['prompt']}\n")
+
+            client = TripoClient(api_key)
 
             def progress_callback(progress, status):
                 self.signals.progress.emit(progress, status)
 
-            # Log options being used
-            active_opts = {k: v for k, v in opts.items() if v is not None and v is not False}
-            if active_opts:
-                self.signals.log.emit(f"Options: {active_opts}\n")
-
             if mode == "single":
-                self.signals.log.emit("Starting image-to-3D...\n")
+                self.signals.log.emit("\nStarting image-to-3D...\n")
                 client.image_to_3d(payload["image"], output, fmt, progress_callback, **opts)
             elif mode == "multiview":
-                self.signals.log.emit(f"Starting multiview-to-3D ({len(payload['images'])} images)...\n")
+                self.signals.log.emit(f"\nStarting multiview-to-3D ({len(payload['images'])} images)...\n")
                 client.multiview_to_3d(payload["images"], output, fmt, progress_callback, **opts)
             elif mode == "text":
-                self.signals.log.emit(f"Starting text-to-3D...\n")
+                self.signals.log.emit(f"\nStarting text-to-3D...\n")
                 client.text_to_3d(payload["prompt"], output, fmt, progress_callback, **opts)
 
             self.signals.log.emit(f"\n✓ Saved: {output}\n")
             self.signals.finished.emit(True, output)
 
         except Exception as e:
+            import traceback
+            self.signals.log.emit(f"\n✗ ERROR: {e}\n")
+            self.signals.log.emit(f"Traceback:\n{traceback.format_exc()}\n")
             self.signals.finished.emit(False, str(e))
 
     def _on_progress(self, percent, status):

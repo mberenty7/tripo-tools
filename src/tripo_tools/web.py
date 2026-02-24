@@ -8,12 +8,15 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import sys
 import logging
 import tempfile
 from io import StringIO
 from pathlib import Path
+
+logger = logging.getLogger("tripo_tools")
 
 try:
     import gradio as gr
@@ -61,8 +64,22 @@ def generate_from_image(image_path, output_format, api_key,
     if not image_path:
         return None, "❌ Error: Please upload an image", ""
     
+    import traceback
     with LogCapture() as log:
         try:
+            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+            sd = int(seed) if seed and str(seed).strip() else None
+            mv = model_version if model_version != "default" else None
+            
+            opts = dict(model_version=mv, texture=texture, pbr=pbr,
+                       face_limit=fl, seed=sd, quad=quad, auto_size=auto_size)
+            
+            logger.info(f"=== Image-to-3D Request ===")
+            logger.info(f"Image: {image_path}")
+            logger.info(f"Format: {output_format}")
+            logger.info(f"API Key: {api_key[:8]}...{api_key[-4:]}")
+            logger.info(f"Options: {json.dumps({k:v for k,v in opts.items()}, default=str, indent=2)}")
+            
             client = TripoClient(api_key)
             
             if progress:
@@ -75,18 +92,8 @@ def generate_from_image(image_path, output_format, api_key,
                     mapped = 0.1 + 0.8 * (prog / 100)
                     progress(mapped, desc=f"Generating... {prog}%")
             
-            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
-            sd = int(seed) if seed and str(seed).strip() else None
-            
             client.image_to_3d(
-                image_path, output_path, output_format, callback,
-                model_version=model_version if model_version != "default" else None,
-                texture=texture,
-                pbr=pbr,
-                face_limit=fl,
-                seed=sd,
-                quad=quad,
-                auto_size=auto_size
+                image_path, output_path, output_format, callback, **opts
             )
             
             if progress:
@@ -95,6 +102,8 @@ def generate_from_image(image_path, output_format, api_key,
             return output_path, f"✅ Success! Generated {Path(output_path).name}", log.get_log()
         
         except Exception as e:
+            logger.error(f"ERROR: {e}")
+            logger.error(traceback.format_exc())
             return None, f"❌ Error: {str(e)}", log.get_log()
 
 
@@ -108,8 +117,22 @@ def generate_from_text(prompt, output_format, api_key,
     if not prompt or not prompt.strip():
         return None, "❌ Error: Please enter a prompt", ""
     
+    import traceback
     with LogCapture() as log:
         try:
+            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+            sd = int(seed) if seed and str(seed).strip() else None
+            mv = model_version if model_version != "default" else None
+            
+            opts = dict(model_version=mv, texture=texture, pbr=pbr,
+                       face_limit=fl, seed=sd, quad=quad, auto_size=auto_size)
+            
+            logger.info(f"=== Text-to-3D Request ===")
+            logger.info(f"Prompt: {prompt.strip()}")
+            logger.info(f"Format: {output_format}")
+            logger.info(f"API Key: {api_key[:8]}...{api_key[-4:]}")
+            logger.info(f"Options: {json.dumps({k:v for k,v in opts.items()}, default=str, indent=2)}")
+            
             client = TripoClient(api_key)
             
             if progress:
@@ -122,18 +145,8 @@ def generate_from_text(prompt, output_format, api_key,
                     mapped = 0.1 + 0.8 * (prog / 100)
                     progress(mapped, desc=f"Generating... {prog}%")
             
-            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
-            sd = int(seed) if seed and str(seed).strip() else None
-            
             client.text_to_3d(
-                prompt.strip(), output_path, output_format, callback,
-                model_version=model_version if model_version != "default" else None,
-                texture=texture,
-                pbr=pbr,
-                face_limit=fl,
-                seed=sd,
-                quad=quad,
-                auto_size=auto_size
+                prompt.strip(), output_path, output_format, callback, **opts
             )
             
             if progress:
@@ -142,6 +155,8 @@ def generate_from_text(prompt, output_format, api_key,
             return output_path, f"✅ Success! Generated {Path(output_path).name}", log.get_log()
         
         except Exception as e:
+            logger.error(f"ERROR: {e}")
+            logger.error(traceback.format_exc())
             return None, f"❌ Error: {str(e)}", log.get_log()
 
 
@@ -156,8 +171,22 @@ def generate_from_multiview(front, back, left, right, output_format, api_key,
     if not all(images):
         return None, "❌ Error: All 4 views required (front, back, left, right)", ""
     
+    import traceback
     with LogCapture() as log:
         try:
+            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
+            sd = int(seed) if seed and str(seed).strip() else None
+            mv = model_version if model_version != "default" else None
+            
+            opts = dict(model_version=mv, texture=texture, pbr=pbr,
+                       face_limit=fl, seed=sd, quad=quad, auto_size=auto_size)
+            
+            logger.info(f"=== Multiview-to-3D Request ===")
+            logger.info(f"Images: {images}")
+            logger.info(f"Format: {output_format}")
+            logger.info(f"API Key: {api_key[:8]}...{api_key[-4:]}")
+            logger.info(f"Options: {json.dumps({k:v for k,v in opts.items()}, default=str, indent=2)}")
+            
             client = TripoClient(api_key)
             
             if progress:
@@ -170,18 +199,8 @@ def generate_from_multiview(front, back, left, right, output_format, api_key,
                     mapped = 0.2 + 0.7 * (prog / 100)
                     progress(mapped, desc=f"Generating... {prog}%")
             
-            fl = int(face_limit) if face_limit and str(face_limit).strip() else None
-            sd = int(seed) if seed and str(seed).strip() else None
-            
             client.multiview_to_3d(
-                images, output_path, output_format, callback,
-                model_version=model_version if model_version != "default" else None,
-                texture=texture,
-                pbr=pbr,
-                face_limit=fl,
-                seed=sd,
-                quad=quad,
-                auto_size=auto_size
+                images, output_path, output_format, callback, **opts
             )
             
             if progress:
@@ -190,6 +209,8 @@ def generate_from_multiview(front, back, left, right, output_format, api_key,
             return output_path, f"✅ Success! Generated {Path(output_path).name}", log.get_log()
         
         except Exception as e:
+            logger.error(f"ERROR: {e}")
+            logger.error(traceback.format_exc())
             return None, f"❌ Error: {str(e)}", log.get_log()
 
 
