@@ -103,8 +103,15 @@ class TripoClient:
             logger.info(f"Response text: {resp.text[:1000]}")
 
         if resp.status_code != 200:
-            logger.error(f"Task creation failed with HTTP {resp.status_code}")
-        resp.raise_for_status()
+            # Build detailed error message with full debug info
+            detail = f"HTTP {resp.status_code}"
+            try:
+                detail += f"\nResponse: {json.dumps(resp.json(), indent=2)}"
+            except Exception:
+                detail += f"\nResponse: {resp.text[:1000]}"
+            detail += f"\nRequest: {json.dumps(log_body, indent=2)}"
+            raise RuntimeError(f"Task creation failed:\n{detail}")
+        
         data = resp.json()
 
         if data.get("code") != 0:
