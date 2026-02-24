@@ -271,16 +271,26 @@ class TripoGUI(QMainWindow):
         advanced_layout.addRow("Model Version:", self.model_version_combo)
 
         # Texture quality
-        self.texture_combo = QComboBox()
-        for t in TEXTURE_OPTIONS:
-            self.texture_combo.addItem(t, t)
-        self.texture_combo.setCurrentIndex(1)  # default: standard
-        advanced_layout.addRow("Texture:", self.texture_combo)
+        self.texture_quality_combo = QComboBox()
+        self.texture_quality_combo.addItem("standard", "standard")
+        self.texture_quality_combo.addItem("detailed (4K)", "detailed")
+        advanced_layout.addRow("Texture Quality:", self.texture_quality_combo)
+
+        # Texture alignment
+        self.texture_alignment_combo = QComboBox()
+        self.texture_alignment_combo.addItem("Default", None)
+        self.texture_alignment_combo.addItem("Original Image", "original_image")
+        self.texture_alignment_combo.addItem("Geometry", "geometry")
+        advanced_layout.addRow("Texture Alignment:", self.texture_alignment_combo)
 
         # Row with checkboxes
         checks_row = QHBoxLayout()
 
         from PySide6.QtWidgets import QCheckBox
+        self.texture_check = QCheckBox("Texture")
+        self.texture_check.setChecked(True)
+        checks_row.addWidget(self.texture_check)
+
         self.pbr_check = QCheckBox("PBR Materials")
         self.pbr_check.setChecked(True)
         checks_row.addWidget(self.pbr_check)
@@ -448,8 +458,10 @@ class TripoGUI(QMainWindow):
         # Gather advanced options
         gen_options = {
             "model_version": self.model_version_combo.currentData(),
-            "texture": self.texture_combo.currentData(),
+            "texture": self.texture_check.isChecked(),
             "pbr": self.pbr_check.isChecked(),
+            "texture_quality": self.texture_quality_combo.currentData(),
+            "texture_alignment": self.texture_alignment_combo.currentData(),
             "quad": self.quad_check.isChecked(),
             "auto_size": self.auto_size_check.isChecked(),
             "seed": self.seed_spin.value() if self.seed_spin.value() >= 0 else None,
@@ -538,7 +550,9 @@ class TripoGUI(QMainWindow):
         if key:
             self.settings.setValue("api_key", key)
         self.settings.setValue("model_version", self.model_version_combo.currentIndex())
-        self.settings.setValue("texture", self.texture_combo.currentIndex())
+        self.settings.setValue("texture", self.texture_check.isChecked())
+        self.settings.setValue("texture_quality", self.texture_quality_combo.currentIndex())
+        self.settings.setValue("texture_alignment", self.texture_alignment_combo.currentIndex())
         self.settings.setValue("pbr", self.pbr_check.isChecked())
         self.settings.setValue("quad", self.quad_check.isChecked())
         self.settings.setValue("auto_size", self.auto_size_check.isChecked())
@@ -552,9 +566,13 @@ class TripoGUI(QMainWindow):
         idx = self.settings.value("model_version", 0, type=int)
         if 0 <= idx < self.model_version_combo.count():
             self.model_version_combo.setCurrentIndex(idx)
-        idx = self.settings.value("texture", 1, type=int)
-        if 0 <= idx < self.texture_combo.count():
-            self.texture_combo.setCurrentIndex(idx)
+        self.texture_check.setChecked(self.settings.value("texture", True, type=bool))
+        idx = self.settings.value("texture_quality", 0, type=int)
+        if 0 <= idx < self.texture_quality_combo.count():
+            self.texture_quality_combo.setCurrentIndex(idx)
+        idx = self.settings.value("texture_alignment", 0, type=int)
+        if 0 <= idx < self.texture_alignment_combo.count():
+            self.texture_alignment_combo.setCurrentIndex(idx)
         self.pbr_check.setChecked(self.settings.value("pbr", True, type=bool))
         self.quad_check.setChecked(self.settings.value("quad", False, type=bool))
         self.auto_size_check.setChecked(self.settings.value("auto_size", False, type=bool))

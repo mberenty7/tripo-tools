@@ -35,8 +35,11 @@ MODEL_VERSIONS = [
     "Turbo-v1.0-20250506",
 ]
 
-# Texture options
-TEXTURE_OPTIONS = ["no", "standard", "HD"]
+# Texture quality options
+TEXTURE_QUALITY_OPTIONS = ["standard", "detailed"]
+
+# Legacy texture options (kept for reference)
+TEXTURE_OPTIONS = ["standard", "detailed"]
 
 
 class TripoClient:
@@ -208,7 +211,9 @@ class TripoClient:
     # High-level convenience methods
 
     def image_to_3d(self, image_path, output_path, fmt="glb", callback=None,
-                    model_version=None, texture="standard", pbr=True,
+                    model_version=None, texture=True, pbr=True,
+                    texture_quality="standard", texture_seed=None,
+                    texture_alignment=None,
                     face_limit=None, seed=None, quad=False, auto_size=False):
         """
         Full pipeline: image → 3D model.
@@ -219,8 +224,11 @@ class TripoClient:
             fmt: Output format (glb, fbx, obj, stl, usdz)
             callback: Optional progress callback(progress, status)
             model_version: Model version (e.g., 'v2.5-20250123')
-            texture: Texture quality ('no', 'standard', 'HD')
-            pbr: Generate PBR materials (True/False)
+            texture: Enable texturing (True/False)
+            pbr: Enable PBR materials (True/False)
+            texture_quality: 'standard' or 'detailed' (4K, v3.0+ only)
+            texture_seed: Seed for texture generation (None for random)
+            texture_alignment: 'original_image' or 'geometry' (None for default)
             face_limit: Max number of faces (None for auto)
             seed: Geometry generation seed (None for random)
             quad: Generate quad mesh (extra cost)
@@ -235,12 +243,16 @@ class TripoClient:
             "file": {"type": "image_token", "file_token": image_token},
         }
         
-        # Add optional parameters
         if model_version:
             params["model_version"] = model_version
-        if texture:
-            params["texture"] = texture
-        params["pbr"] = pbr
+        params["texture"] = bool(texture)
+        params["pbr"] = bool(pbr)
+        if texture_quality and texture_quality != "standard":
+            params["texture_quality"] = texture_quality
+        if texture_seed is not None:
+            params["texture_seed"] = texture_seed
+        if texture_alignment:
+            params["texture_alignment"] = texture_alignment
         if face_limit is not None:
             params["face_limit"] = face_limit
         if seed is not None:
@@ -255,7 +267,9 @@ class TripoClient:
         return self.download_model(task_data, output_path, fmt)
 
     def text_to_3d(self, prompt, output_path, fmt="glb", callback=None,
-                   model_version=None, texture="standard", pbr=True,
+                   model_version=None, texture=True, pbr=True,
+                   texture_quality="standard", texture_seed=None,
+                   texture_alignment=None,
                    face_limit=None, seed=None, quad=False, auto_size=False):
         """
         Full pipeline: text prompt → 3D model.
@@ -266,8 +280,11 @@ class TripoClient:
             fmt: Output format
             callback: Optional progress callback(progress, status)
             model_version: Model version (e.g., 'v2.5-20250123')
-            texture: Texture quality ('no', 'standard', 'HD')
-            pbr: Generate PBR materials (True/False)
+            texture: Enable texturing (True/False)
+            pbr: Enable PBR materials (True/False)
+            texture_quality: 'standard' or 'detailed'
+            texture_seed: Seed for texture generation
+            texture_alignment: 'original_image' or 'geometry'
             face_limit: Max number of faces (None for auto)
             seed: Geometry generation seed (None for random)
             quad: Generate quad mesh (extra cost)
@@ -278,12 +295,16 @@ class TripoClient:
         """
         params = {"prompt": prompt}
         
-        # Add optional parameters
         if model_version:
             params["model_version"] = model_version
-        if texture:
-            params["texture"] = texture
-        params["pbr"] = pbr
+        params["texture"] = bool(texture)
+        params["pbr"] = bool(pbr)
+        if texture_quality and texture_quality != "standard":
+            params["texture_quality"] = texture_quality
+        if texture_seed is not None:
+            params["texture_seed"] = texture_seed
+        if texture_alignment:
+            params["texture_alignment"] = texture_alignment
         if face_limit is not None:
             params["face_limit"] = face_limit
         if seed is not None:
@@ -298,7 +319,9 @@ class TripoClient:
         return self.download_model(task_data, output_path, fmt)
 
     def multiview_to_3d(self, image_paths, output_path, fmt="glb", callback=None,
-                        model_version=None, texture="standard", pbr=True,
+                        model_version=None, texture=True, pbr=True,
+                        texture_quality="standard", texture_seed=None,
+                        texture_alignment=None,
                         face_limit=None, seed=None, quad=False, auto_size=False):
         """
         Full pipeline: multiple views → 3D model.
@@ -309,8 +332,11 @@ class TripoClient:
             fmt: Output format
             callback: Optional progress callback(progress, status)
             model_version: Model version (e.g., 'v2.5-20250123')
-            texture: Texture quality ('no', 'standard', 'HD')
-            pbr: Generate PBR materials (True/False)
+            texture: Enable texturing (True/False)
+            pbr: Enable PBR materials (True/False)
+            texture_quality: 'standard' or 'detailed'
+            texture_seed: Seed for texture generation
+            texture_alignment: 'original_image' or 'geometry'
             face_limit: Max number of faces (None for auto)
             seed: Geometry generation seed (None for random)
             quad: Generate quad mesh (extra cost)
@@ -325,12 +351,16 @@ class TripoClient:
             "files": [{"type": "image_token", "file_token": t} for t in tokens],
         }
         
-        # Add optional parameters
         if model_version:
             params["model_version"] = model_version
-        if texture:
-            params["texture"] = texture
-        params["pbr"] = pbr
+        params["texture"] = bool(texture)
+        params["pbr"] = bool(pbr)
+        if texture_quality and texture_quality != "standard":
+            params["texture_quality"] = texture_quality
+        if texture_seed is not None:
+            params["texture_seed"] = texture_seed
+        if texture_alignment:
+            params["texture_alignment"] = texture_alignment
         if face_limit is not None:
             params["face_limit"] = face_limit
         if seed is not None:

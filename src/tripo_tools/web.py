@@ -55,7 +55,7 @@ def check_gradio():
 
 
 def generate_from_image(image_path, output_format, api_key, 
-                        model_version, texture, pbr, face_limit, seed, quad, auto_size,
+                        model_version, texture_quality, texture, pbr, quad, auto_size, texture_alignment, face_limit, seed,
                         progress=None):
     """Generate 3D model from a single image."""
     if not api_key:
@@ -70,8 +70,10 @@ def generate_from_image(image_path, output_format, api_key,
             fl = int(face_limit) if face_limit and str(face_limit).strip() else None
             sd = int(seed) if seed and str(seed).strip() else None
             mv = model_version if model_version != "default" else None
+            tq = texture_quality if texture_quality != "standard" else "standard"
+            ta = texture_alignment if texture_alignment != "default" else None
             
-            opts = dict(model_version=mv, texture=texture, pbr=pbr,
+            opts = dict(model_version=mv, texture=texture, pbr=pbr, texture_quality=tq, texture_alignment=ta,
                        face_limit=fl, seed=sd, quad=quad, auto_size=auto_size)
             
             logger.info(f"=== Image-to-3D Request ===")
@@ -108,7 +110,7 @@ def generate_from_image(image_path, output_format, api_key,
 
 
 def generate_from_text(prompt, output_format, api_key,
-                       model_version, texture, pbr, face_limit, seed, quad, auto_size,
+                       model_version, texture_quality, texture, pbr, quad, auto_size, texture_alignment, face_limit, seed,
                        progress=None):
     """Generate 3D model from text prompt."""
     if not api_key:
@@ -123,8 +125,10 @@ def generate_from_text(prompt, output_format, api_key,
             fl = int(face_limit) if face_limit and str(face_limit).strip() else None
             sd = int(seed) if seed and str(seed).strip() else None
             mv = model_version if model_version != "default" else None
+            tq = texture_quality if texture_quality != "standard" else "standard"
+            ta = texture_alignment if texture_alignment != "default" else None
             
-            opts = dict(model_version=mv, texture=texture, pbr=pbr,
+            opts = dict(model_version=mv, texture=texture, pbr=pbr, texture_quality=tq, texture_alignment=ta,
                        face_limit=fl, seed=sd, quad=quad, auto_size=auto_size)
             
             logger.info(f"=== Text-to-3D Request ===")
@@ -161,7 +165,7 @@ def generate_from_text(prompt, output_format, api_key,
 
 
 def generate_from_multiview(front, back, left, right, output_format, api_key,
-                            model_version, texture, pbr, face_limit, seed, quad, auto_size,
+                            model_version, texture_quality, texture, pbr, quad, auto_size, texture_alignment, face_limit, seed,
                             progress=None):
     """Generate 3D model from 4 views."""
     if not api_key:
@@ -177,8 +181,10 @@ def generate_from_multiview(front, back, left, right, output_format, api_key,
             fl = int(face_limit) if face_limit and str(face_limit).strip() else None
             sd = int(seed) if seed and str(seed).strip() else None
             mv = model_version if model_version != "default" else None
+            tq = texture_quality if texture_quality != "standard" else "standard"
+            ta = texture_alignment if texture_alignment != "default" else None
             
-            opts = dict(model_version=mv, texture=texture, pbr=pbr,
+            opts = dict(model_version=mv, texture=texture, pbr=pbr, texture_quality=tq, texture_alignment=ta,
                        face_limit=fl, seed=sd, quad=quad, auto_size=auto_size)
             
             logger.info(f"=== Multiview-to-3D Request ===")
@@ -258,8 +264,8 @@ def build_interface():
                     value="default",
                     label="Model Version",
                 )
-                texture = gr.Dropdown(
-                    choices=TEXTURE_OPTIONS,
+                texture_quality = gr.Dropdown(
+                    choices=["standard", "detailed"],
                     value="standard",
                     label="Texture Quality",
                 )
@@ -270,9 +276,17 @@ def build_interface():
                 )
             
             with gr.Row():
+                texture = gr.Checkbox(value=True, label="Texture")
                 pbr = gr.Checkbox(value=True, label="PBR Materials")
                 quad = gr.Checkbox(value=False, label="Quad Mesh (extra cost)")
                 auto_size = gr.Checkbox(value=False, label="Auto Scale (real-world size)")
+            
+            with gr.Row():
+                texture_alignment = gr.Dropdown(
+                    choices=["default", "original_image", "geometry"],
+                    value="default",
+                    label="Texture Alignment",
+                )
             
             with gr.Row():
                 face_limit = gr.Textbox(
@@ -309,7 +323,8 @@ def build_interface():
                 image_btn.click(
                     generate_from_image,
                     inputs=[image_input, output_format, api_key,
-                            model_version, texture, pbr, face_limit, seed, quad, auto_size],
+                            model_version, texture_quality, texture, pbr, quad, auto_size,
+                            texture_alignment, face_limit, seed],
                     outputs=[image_output, image_status, image_log],
                 )
             
@@ -335,7 +350,8 @@ def build_interface():
                 text_btn.click(
                     generate_from_text,
                     inputs=[prompt_input, output_format, api_key,
-                            model_version, texture, pbr, face_limit, seed, quad, auto_size],
+                            model_version, texture_quality, texture, pbr, quad, auto_size,
+                            texture_alignment, face_limit, seed],
                     outputs=[text_output, text_status, text_log],
                 )
             
@@ -361,7 +377,8 @@ def build_interface():
                 multi_btn.click(
                     generate_from_multiview,
                     inputs=[front_img, back_img, left_img, right_img, output_format, api_key,
-                            model_version, texture, pbr, face_limit, seed, quad, auto_size],
+                            model_version, texture_quality, texture, pbr, quad, auto_size,
+                            texture_alignment, face_limit, seed],
                     outputs=[multi_output, multi_status, multi_log],
                 )
         

@@ -57,11 +57,18 @@ Examples:
     parser.add_argument("--model-version", "-mv",
                         choices=MODEL_VERSIONS,
                         help="Model version to use")
-    parser.add_argument("--texture", "-tx",
-                        choices=TEXTURE_OPTIONS, default="standard",
-                        help="Texture quality (default: standard)")
+    parser.add_argument("--no-texture", action="store_true",
+                        help="Disable texturing")
     parser.add_argument("--no-pbr", action="store_true",
                         help="Disable PBR materials")
+    parser.add_argument("--texture-quality", "-tq",
+                        choices=["standard", "detailed"], default="standard",
+                        help="Texture quality (default: standard, detailed=4K)")
+    parser.add_argument("--texture-seed", type=int,
+                        help="Seed for texture generation")
+    parser.add_argument("--texture-alignment", "-ta",
+                        choices=["original_image", "geometry"],
+                        help="Texture alignment priority")
     parser.add_argument("--face-limit", "-fl", type=int,
                         help="Maximum number of faces")
     parser.add_argument("--seed", "-s", type=int,
@@ -153,14 +160,17 @@ Examples:
     print(f"[tripo] Output: {output_path}")
     if args.model_version:
         print(f"[tripo] Model: {args.model_version}")
-    print(f"[tripo] Texture: {args.texture}, PBR: {not args.no_pbr}")
+    print(f"[tripo] Texture: {not args.no_texture}, PBR: {not args.no_pbr}, Quality: {args.texture_quality}")
     print()
 
     try:
         common_args = {
             "model_version": args.model_version,
-            "texture": args.texture,
+            "texture": not args.no_texture,
             "pbr": not args.no_pbr,
+            "texture_quality": args.texture_quality,
+            "texture_seed": args.texture_seed,
+            "texture_alignment": args.texture_alignment,
             "face_limit": args.face_limit,
             "seed": args.seed,
             "quad": args.quad,
