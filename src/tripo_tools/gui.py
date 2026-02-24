@@ -25,7 +25,7 @@ except ImportError:
     print("Or install with GUI support: pip install tripo-tools[gui]")
     sys.exit(1)
 
-from .client import TripoClient
+from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
 
 OUTPUT_FORMATS = ["glb", "fbx", "obj", "stl", "usdz"]
 SUPPORTED_IMAGES = "Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"
@@ -237,6 +237,66 @@ class TripoGUI(QMainWindow):
 
         layout.addWidget(output_group)
 
+        # Advanced Options
+        advanced_group = QGroupBox("Generation Options")
+        advanced_layout = QFormLayout(advanced_group)
+
+        # Model version
+        self.model_version_combo = QComboBox()
+        self.model_version_combo.addItem("Auto (latest)", None)
+        for v in MODEL_VERSIONS:
+            self.model_version_combo.addItem(v, v)
+        advanced_layout.addRow("Model Version:", self.model_version_combo)
+
+        # Texture quality
+        self.texture_combo = QComboBox()
+        for t in TEXTURE_OPTIONS:
+            self.texture_combo.addItem(t, t)
+        self.texture_combo.setCurrentIndex(1)  # default: standard
+        advanced_layout.addRow("Texture:", self.texture_combo)
+
+        # Row with checkboxes
+        checks_row = QHBoxLayout()
+
+        from PySide6.QtWidgets import QCheckBox
+        self.pbr_check = QCheckBox("PBR Materials")
+        self.pbr_check.setChecked(True)
+        checks_row.addWidget(self.pbr_check)
+
+        self.quad_check = QCheckBox("Quad Mesh")
+        self.quad_check.setToolTip("Generate quad mesh (extra cost)")
+        checks_row.addWidget(self.quad_check)
+
+        self.auto_size_check = QCheckBox("Auto Size")
+        self.auto_size_check.setToolTip("Scale to real-world dimensions")
+        checks_row.addWidget(self.auto_size_check)
+
+        checks_row.addStretch()
+        advanced_layout.addRow(checks_row)
+
+        # Seed and face limit row
+        numbers_row = QHBoxLayout()
+        numbers_row.addWidget(QLabel("Seed:"))
+        self.seed_spin = QSpinBox()
+        self.seed_spin.setRange(-1, 999999999)
+        self.seed_spin.setValue(-1)
+        self.seed_spin.setSpecialValueText("Random")
+        self.seed_spin.setToolTip("-1 = random seed")
+        numbers_row.addWidget(self.seed_spin)
+
+        numbers_row.addSpacing(20)
+        numbers_row.addWidget(QLabel("Face Limit:"))
+        self.face_limit_spin = QSpinBox()
+        self.face_limit_spin.setRange(0, 1000000)
+        self.face_limit_spin.setValue(0)
+        self.face_limit_spin.setSpecialValueText("Auto")
+        self.face_limit_spin.setToolTip("0 = automatic")
+        numbers_row.addWidget(self.face_limit_spin)
+        numbers_row.addStretch()
+        advanced_layout.addRow(numbers_row)
+
+        layout.addWidget(advanced_group)
+
         # Generate Button
         self.generate_btn = QPushButton("🚀  Generate 3D Model")
         self.generate_btn.setMinimumHeight(44)
@@ -363,6 +423,17 @@ class TripoGUI(QMainWindow):
         self.log_output.clear()
         self._on_log(f"Mode: {mode}\nOutput: {output}\n\n")
 
+        # Gather advanced options
+        gen_options = {
+            "model_version": self.model_version_combo.currentData(),
+            "texture": self.texture_combo.currentData(),
+            "pbr": self.pbr_check.isChecked(),
+            "quad": self.quad_check.isChecked(),
+            "auto_size": self.auto_size_check.isChecked(),
+            "seed": self.seed_spin.value() if self.seed_spin.value() >= 0 else None,
+            "face_limit": self.face_limit_spin.value() if self.face_limit_spin.value() > 0 else None,
+        }
+
         self.generate_btn.setEnabled(False)
         self.progress_bar.setValue(0)
         self.progress_bar.show()
@@ -370,28 +441,34 @@ class TripoGUI(QMainWindow):
 
         self.worker_thread = threading.Thread(
             target=self._generate_worker,
-            args=(api_key, mode, payload, output, fmt, timeout),
+            args=(api_key, mode, payload, output, fmt, timeout, gen_options),
             daemon=True,
         )
         self.worker_thread.start()
         self._save_settings()
 
-    def _generate_worker(self, api_key, mode, payload, output, fmt, timeout):
+    def _generate_worker(self, api_key, mode, payload, output, fmt, timeout, gen_options=None):
         try:
             client = TripoClient(api_key)
+            opts = gen_options or {}
 
             def progress_callback(progress, status):
                 self.signals.progress.emit(progress, status)
 
+            # Log options being used
+            active_opts = {k: v for k, v in opts.items() if v is not None and v is not False}
+            if active_opts:
+                self.signals.log.emit(f"Options: {active_opts}\n")
+
             if mode == "single":
                 self.signals.log.emit("Starting image-to-3D...\n")
-                client.image_to_3d(payload["image"], output, fmt, progress_callback)
+                client.image_to_3d(payload["image"], output, fmt, progress_callback, **opts)
             elif mode == "multiview":
                 self.signals.log.emit(f"Starting multiview-to-3D ({len(payload['images'])} images)...\n")
-                client.multiview_to_3d(payload["images"], output, fmt, progress_callback)
+                client.multiview_to_3d(payload["images"], output, fmt, progress_callback, **opts)
             elif mode == "text":
                 self.signals.log.emit(f"Starting text-to-3D...\n")
-                client.text_to_3d(payload["prompt"], output, fmt, progress_callback)
+                client.text_to_3d(payload["prompt"], output, fmt, progress_callback, **opts)
 
             self.signals.log.emit(f"\n✓ Saved: {output}\n")
             self.signals.finished.emit(True, output)
@@ -425,11 +502,29 @@ class TripoGUI(QMainWindow):
         key = self.api_key_input.text().strip()
         if key:
             self.settings.setValue("api_key", key)
+        self.settings.setValue("model_version", self.model_version_combo.currentIndex())
+        self.settings.setValue("texture", self.texture_combo.currentIndex())
+        self.settings.setValue("pbr", self.pbr_check.isChecked())
+        self.settings.setValue("quad", self.quad_check.isChecked())
+        self.settings.setValue("auto_size", self.auto_size_check.isChecked())
+        self.settings.setValue("seed", self.seed_spin.value())
+        self.settings.setValue("face_limit", self.face_limit_spin.value())
 
     def _load_settings(self):
         key = self.settings.value("api_key", "")
         if key:
             self.api_key_input.setText(key)
+        idx = self.settings.value("model_version", 0, type=int)
+        if 0 <= idx < self.model_version_combo.count():
+            self.model_version_combo.setCurrentIndex(idx)
+        idx = self.settings.value("texture", 1, type=int)
+        if 0 <= idx < self.texture_combo.count():
+            self.texture_combo.setCurrentIndex(idx)
+        self.pbr_check.setChecked(self.settings.value("pbr", True, type=bool))
+        self.quad_check.setChecked(self.settings.value("quad", False, type=bool))
+        self.auto_size_check.setChecked(self.settings.value("auto_size", False, type=bool))
+        self.seed_spin.setValue(self.settings.value("seed", -1, type=int))
+        self.face_limit_spin.setValue(self.settings.value("face_limit", 0, type=int))
 
 
 def main():
