@@ -5,6 +5,7 @@ The core client for interacting with Tripo's 3D generation API.
 """
 
 import os
+import sys
 import time
 import json
 import logging
@@ -13,6 +14,12 @@ import requests
 API_BASE = "https://api.tripo3d.ai/v2/openapi"
 
 logger = logging.getLogger("tripo_tools")
+
+# Always print debug info to console (stdout/stderr)
+_console_handler = logging.StreamHandler(sys.stderr)
+_console_handler.setFormatter(logging.Formatter("[tripo %(asctime)s] %(message)s", datefmt="%H:%M:%S"))
+logger.addHandler(_console_handler)
+logger.setLevel(logging.DEBUG)
 
 # Task types
 TASK_IMAGE_TO_MODEL = "image_to_model"
