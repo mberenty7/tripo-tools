@@ -35,6 +35,14 @@ MODEL_VERSIONS = [
     "Turbo-v1.0-20250506",
 ]
 
+# Which task types each model supports
+MODEL_SUPPORTED_TASKS = {
+    "v2.5-20250123": ["image_to_model", "text_to_model", "multiview_to_model"],
+    "v2.0-20240919": ["image_to_model", "text_to_model", "multiview_to_model"],
+    "v1.4-20240625": ["image_to_model", "text_to_model", "multiview_to_model"],
+    "Turbo-v1.0-20250506": ["image_to_model", "text_to_model"],  # No multiview
+}
+
 # Texture quality options
 TEXTURE_QUALITY_OPTIONS = ["standard", "detailed"]
 
@@ -87,6 +95,16 @@ class TripoClient:
 
     def create_task(self, task_type, params):
         """Create a generation task."""
+        # Check model version compatibility
+        model_ver = params.get("model_version")
+        if model_ver and model_ver in MODEL_SUPPORTED_TASKS:
+            supported = MODEL_SUPPORTED_TASKS[model_ver]
+            if task_type not in supported:
+                raise RuntimeError(
+                    f"Model '{model_ver}' does not support '{task_type}'. "
+                    f"Supported: {supported}. Try a different model version."
+                )
+        
         body = {"type": task_type, **params}
 
         # Log the full request for debugging
