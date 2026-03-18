@@ -29,6 +29,8 @@ TASK_REFINE_MODEL = "refine_model"
 
 # Model versions
 MODEL_VERSIONS = [
+    "v3.1-20260211",
+    "v3.0-20250812",
     "v2.5-20250123",
     "v2.0-20240919",
     "v1.4-20240625",
@@ -37,11 +39,16 @@ MODEL_VERSIONS = [
 
 # Which task types each model supports
 MODEL_SUPPORTED_TASKS = {
+    "v3.1-20260211": ["image_to_model", "text_to_model", "multiview_to_model"],
+    "v3.0-20250812": ["image_to_model", "text_to_model", "multiview_to_model"],
     "v2.5-20250123": ["image_to_model", "text_to_model", "multiview_to_model"],
     "v2.0-20240919": ["image_to_model", "text_to_model", "multiview_to_model"],
     "v1.4-20240625": ["image_to_model", "text_to_model", "multiview_to_model"],
     "Turbo-v1.0-20250506": ["image_to_model", "text_to_model"],  # No multiview
 }
+
+# Geometry quality options (only valid for model_version >= v3.0-20250812)
+GEOMETRY_QUALITIES = ["standard", "detailed"]
 
 # Texture quality options
 TEXTURE_QUALITY_OPTIONS = ["standard", "detailed"]
@@ -229,7 +236,8 @@ class TripoClient:
     # High-level convenience methods
 
     def image_to_3d(self, image_path, output_path, fmt="glb", callback=None,
-                    model_version=None, texture=True, pbr=True,
+                    model_version=None, geometry_quality=None,
+                    texture=True, pbr=True,
                     texture_quality="standard", texture_seed=None,
                     texture_alignment=None,
                     face_limit=None, seed=None, quad=False, auto_size=False):
@@ -263,6 +271,8 @@ class TripoClient:
         
         if model_version:
             params["model_version"] = model_version
+            if geometry_quality and geometry_quality != "standard":
+                params["geometry_quality"] = geometry_quality
         params["texture"] = bool(texture)
         params["pbr"] = bool(pbr)
         if texture_quality and texture_quality != "standard":
@@ -285,7 +295,8 @@ class TripoClient:
         return self.download_model(task_data, output_path, fmt)
 
     def text_to_3d(self, prompt, output_path, fmt="glb", callback=None,
-                   model_version=None, texture=True, pbr=True,
+                   model_version=None, geometry_quality=None,
+                   texture=True, pbr=True,
                    texture_quality="standard", texture_seed=None,
                    texture_alignment=None,
                    face_limit=None, seed=None, quad=False, auto_size=False):
@@ -315,6 +326,8 @@ class TripoClient:
         
         if model_version:
             params["model_version"] = model_version
+            if geometry_quality and geometry_quality != "standard":
+                params["geometry_quality"] = geometry_quality
         params["texture"] = bool(texture)
         params["pbr"] = bool(pbr)
         if texture_quality and texture_quality != "standard":
@@ -337,7 +350,8 @@ class TripoClient:
         return self.download_model(task_data, output_path, fmt)
 
     def multiview_to_3d(self, image_paths, output_path, fmt="glb", callback=None,
-                        model_version=None, texture=True, pbr=True,
+                        model_version=None, geometry_quality=None,
+                        texture=True, pbr=True,
                         texture_quality="standard", texture_seed=None,
                         texture_alignment=None,
                         face_limit=None, seed=None, quad=False, auto_size=False):
@@ -371,6 +385,8 @@ class TripoClient:
         
         if model_version:
             params["model_version"] = model_version
+            if geometry_quality and geometry_quality != "standard":
+                params["geometry_quality"] = geometry_quality
         params["texture"] = bool(texture)
         params["pbr"] = bool(pbr)
         if texture_quality and texture_quality != "standard":

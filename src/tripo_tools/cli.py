@@ -13,7 +13,7 @@ import os
 import sys
 from pathlib import Path
 
-from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
+from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS, GEOMETRY_QUALITIES
 
 
 def print_progress(progress, status):
@@ -57,6 +57,10 @@ Examples:
     parser.add_argument("--model-version", "-mv",
                         choices=MODEL_VERSIONS,
                         help="Model version to use")
+    parser.add_argument("--geometry-quality", "-gq",
+                        choices=GEOMETRY_QUALITIES, default="standard",
+                        help="Geometry quality — 'detailed' for max detail "
+                             "(only for model >= v3.0, default: standard)")
     parser.add_argument("--no-texture", action="store_true",
                         help="Disable texturing")
     parser.add_argument("--no-pbr", action="store_true",
@@ -166,6 +170,7 @@ Examples:
     try:
         common_args = {
             "model_version": args.model_version,
+            "geometry_quality": args.geometry_quality,
             "texture": not args.no_texture,
             "pbr": not args.no_pbr,
             "texture_quality": args.texture_quality,

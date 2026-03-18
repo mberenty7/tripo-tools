@@ -26,7 +26,7 @@ except ImportError:
     print("Or install with GUI support: pip install tripo-tools[gui]")
     sys.exit(1)
 
-from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS
+from .client import TripoClient, MODEL_VERSIONS, TEXTURE_OPTIONS, GEOMETRY_QUALITIES
 
 OUTPUT_FORMATS = ["glb", "fbx", "obj", "stl", "usdz"]
 SUPPORTED_IMAGES = "Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"
@@ -270,6 +270,16 @@ class TripoGUI(QMainWindow):
             self.model_version_combo.addItem(v, v)
         advanced_layout.addRow("Model Version:", self.model_version_combo)
 
+        # Geometry quality (only for v3.0+)
+        self.geometry_quality_combo = QComboBox()
+        for q in GEOMETRY_QUALITIES:
+            label = "detailed (ultra)" if q == "detailed" else q
+            self.geometry_quality_combo.addItem(label, q)
+        self.geometry_quality_combo.setToolTip("Max detail geometry (only for model >= v3.0)")
+        self.geometry_quality_combo.setEnabled(False)
+        self.model_version_combo.currentIndexChanged.connect(self._on_model_version_changed)
+        advanced_layout.addRow("Geometry Quality:", self.geometry_quality_combo)
+
         # Texture quality
         self.texture_quality_combo = QComboBox()
         self.texture_quality_combo.addItem("standard", "standard")
@@ -368,6 +378,14 @@ class TripoGUI(QMainWindow):
 
         self.statusBar().showMessage("Ready")
 
+    def _on_model_version_changed(self, index):
+        """Enable geometry quality only for v3+ models."""
+        version = self.model_version_combo.currentData()
+        is_v3 = version is not None and version.startswith("v3")
+        self.geometry_quality_combo.setEnabled(is_v3)
+        if not is_v3:
+            self.geometry_quality_combo.setCurrentIndex(0)
+
     def _get_api_key(self):
         key = self.api_key_input.text().strip()
         if not key:
@@ -458,6 +476,7 @@ class TripoGUI(QMainWindow):
         # Gather advanced options
         gen_options = {
             "model_version": self.model_version_combo.currentData(),
+            "geometry_quality": self.geometry_quality_combo.currentData() if self.geometry_quality_combo.isEnabled() else None,
             "texture": self.texture_check.isChecked(),
             "pbr": self.pbr_check.isChecked(),
             "texture_quality": self.texture_quality_combo.currentData(),
