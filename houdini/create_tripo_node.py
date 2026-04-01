@@ -234,12 +234,29 @@ if _valid:
 
                 parent = n.parent()
                 loader_name = "tripo_result"
+
+                is_glb = mesh_path.lower().endswith(".glb") or mesh_path.lower().endswith(".gltf")
                 loader = parent.node(loader_name)
+
+                if loader:
+                    old_is_gltf = loader.type().name() == "gltf"
+                    if old_is_gltf != is_glb:
+                        loader.destroy()
+                        loader = None
+
                 if not loader:
-                    loader = parent.createNode("file", loader_name)
+                    if is_glb:
+                        loader = parent.createNode("gltf", loader_name)
+                    else:
+                        loader = parent.createNode("file", loader_name)
                     loader.setPosition(n.position() + hou.Vector2(3, 0))
-                loader.parm("file").set(mesh_path)
-                loader.parm("reload").pressButton()
+
+                if is_glb:
+                    loader.parm("filename").set(mesh_path)
+                else:
+                    loader.parm("file").set(mesh_path)
+                    loader.parm("reload").pressButton()
+
                 loader.setDisplayFlag(True)
                 loader.setRenderFlag(True)
                 parent.layoutChildren()
