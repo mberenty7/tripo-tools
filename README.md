@@ -255,7 +255,7 @@ py -3.11 -m pip show tripo-tools
 py -3.11 -m pip list | findstr tripo
 ```
 
-### Tripo AI — Houdini Node
+## Tripo AI — Houdini Node
 
 A Houdini SOP node for generating 3D models from images, text prompts, or multiview turnarounds using the [Tripo AI](https://tripo3d.ai) API.
 
