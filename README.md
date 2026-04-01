@@ -253,6 +253,7 @@ py -3.11 -m pip install "tripo-tools[web] @ git+https://github.com/mberenty7/tri
 ```batch
 py -3.11 -m pip show tripo-tools
 py -3.11 -m pip list | findstr tripo
+```
 
 ### Tripo AI — Houdini Node
 
