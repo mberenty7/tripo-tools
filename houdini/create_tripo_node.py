@@ -76,11 +76,11 @@ mesh_format = format_items[node.parm("mesh_format").eval()]
 api_key = node.parm("api_key").eval() or os.environ.get("TRIPO_API_KEY", "")
 
 # Read advanced settings
-version_items = ["v3.0-20250812", "v2.5-20250123", "v2.0-20240919"]
+version_items = ["v3.1-20260211", "v3.0-20250812", "v2.5-20250123", "v2.0-20240919", "v1.4-20240625", "Turbo-v1.0-20250506"]
 model_version = version_items[node.parm("model_version").eval()]
 
-style_items = ["", "person:person2cartoon", "person:person2game", "person:person2realistic", "animal:animal2cartoon"]
-style_id = style_items[node.parm("style_id").eval()] or None
+geo_quality_items = ["standard", "detailed"]
+geometry_quality_val = geo_quality_items[node.parm("geometry_quality").eval()]
 
 texture_val = bool(node.parm("texture").eval())
 pbr_val = bool(node.parm("pbr").eval())
@@ -102,9 +102,6 @@ texture_quality_val = tex_quality_items[node.parm("texture_quality").eval()]
 
 tex_align_items = ["geometry", "original_image", "prefer_original_image"]
 texture_alignment_val = tex_align_items[node.parm("texture_alignment").eval()]
-
-orientation_items = ["default", "align_image"]
-orientation_val = orientation_items[node.parm("orientation").eval()]
 
 negative_prompt = node.parm("negative_prompt").eval() or None
 
@@ -172,9 +169,10 @@ if _valid:
         try:
             client = TripoClient(api_key)
         except Exception as exc:
+            err_msg = str(exc)
             set_status("Auth error")
             hdefereval.executeDeferred(
-                lambda: hou.ui.displayMessage(str(exc), title="Tripo Auth Error", severity=hou.severityType.Error)
+                lambda: hou.ui.displayMessage(err_msg, title="Tripo Auth Error", severity=hou.severityType.Error)
             )
             return
 
@@ -188,9 +186,9 @@ if _valid:
             if mode == "image":
                 client.image_to_3d(
                     image_path, output_path, mesh_format, on_progress,
-                    model_version=model_version, style_id=style_id,
+                    model_version=model_version, geometry_quality=geometry_quality_val,
                     texture=texture_val, pbr=pbr_val, seed=seed_val,
-                    orientation=orientation_val, texture_seed=texture_seed_val,
+                    texture_seed=texture_seed_val,
                     texture_quality=texture_quality_val,
                     texture_alignment=texture_alignment_val,
                     face_limit=face_limit_val, auto_size=auto_size_val,
@@ -199,18 +197,18 @@ if _valid:
             elif mode == "text":
                 client.text_to_3d(
                     text_prompt, output_path, mesh_format, on_progress,
-                    model_version=model_version, style_id=style_id,
+                    model_version=model_version, geometry_quality=geometry_quality_val,
                     texture=texture_val, pbr=pbr_val, seed=seed_val,
                     texture_seed=texture_seed_val,
                     texture_quality=texture_quality_val,
                     face_limit=face_limit_val, auto_size=auto_size_val,
-                    quad=quad_val, negative_prompt=negative_prompt,
+                    quad=quad_val,
                 )
             elif mode == "multiview":
                 client.multiview_to_3d(
                     multiview_paths, output_path, mesh_format, on_progress,
-                    model_version=model_version, texture=texture_val,
-                    pbr=pbr_val, seed=seed_val, orientation=orientation_val,
+                    model_version=model_version, geometry_quality=geometry_quality_val,
+                    texture=texture_val, pbr=pbr_val, seed=seed_val,
                     texture_seed=texture_seed_val,
                     texture_quality=texture_quality_val,
                     texture_alignment=texture_alignment_val,
@@ -218,10 +216,11 @@ if _valid:
                     quad=quad_val,
                 )
         except Exception as exc:
-            set_status("Error: " + str(exc))
+            err_msg = str(exc)
+            set_status("Error: " + err_msg)
             set_status_bar("Tripo: Error", hou.severityType.Error)
             hdefereval.executeDeferred(
-                lambda: hou.ui.displayMessage(str(exc), title="Tripo Error", severity=hou.severityType.Error)
+                lambda: hou.ui.displayMessage(err_msg, title="Tripo Error", severity=hou.severityType.Error)
             )
             return
 
@@ -391,18 +390,18 @@ def create_tripo_node():
 
     settings_folder.addParmTemplate(hou.MenuParmTemplate(
         "model_version", "Model Version",
-        menu_items=["v3.0-20250812", "v2.5-20250123", "v2.0-20240919"],
-        menu_labels=["v3.0 (Latest)", "v2.5", "v2.0"],
+        menu_items=["v3.1-20260211", "v3.0-20250812", "v2.5-20250123", "v2.0-20240919", "v1.4-20240625", "Turbo-v1.0-20250506"],
+        menu_labels=["v3.1 (Latest)", "v3.0", "v2.5", "v2.0", "v1.4", "Turbo v1.0"],
         default_value=0,
         help="Tripo model version",
     ))
 
     settings_folder.addParmTemplate(hou.MenuParmTemplate(
-        "style_id", "Style",
-        menu_items=["none", "person:person2cartoon", "person:person2game", "person:person2realistic", "animal:animal2cartoon"],
-        menu_labels=["(none)", "Person: Cartoon", "Person: Game", "Person: Realistic", "Animal: Cartoon"],
+        "geometry_quality", "Geometry Quality",
+        menu_items=["standard", "detailed"],
+        menu_labels=["Standard", "Detailed"],
         default_value=0,
-        help="Style preset for specialized generation",
+        help="Geometry quality (v3.0+ only)",
     ))
 
     settings_folder.addParmTemplate(hou.IntParmTemplate(
@@ -441,14 +440,6 @@ def create_tripo_node():
     ))
 
     settings_folder.addParmTemplate(hou.SeparatorParmTemplate("sep_geo"))
-
-    settings_folder.addParmTemplate(hou.MenuParmTemplate(
-        "orientation", "Orientation",
-        menu_items=["default", "align_image"],
-        menu_labels=["Default", "Align to Image"],
-        default_value=0,
-        help="Model orientation (image modes only)",
-    ))
 
     settings_folder.addParmTemplate(hou.ToggleParmTemplate(
         "auto_size", "Auto Size", default_value=True,
