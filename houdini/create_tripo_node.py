@@ -342,7 +342,7 @@ def create_tripo_node():
         file_type=hou.fileType.Image,
         help="Front view image (Multiview mode)",
     )
-    mv_front.setConditional(hou.parmCondType.HideWhen, "{ mode != 2 }")
+    mv_front.setConditional(hou.parmCondType.HideWhen, "{ mode != multiview_to_model }")
     input_folder.addParmTemplate(mv_front)
 
     mv_back = hou.StringParmTemplate(
@@ -351,7 +351,7 @@ def create_tripo_node():
         file_type=hou.fileType.Image,
         help="Back view image (Multiview mode)",
     )
-    mv_back.setConditional(hou.parmCondType.HideWhen, "{ mode != 2 }")
+    mv_back.setConditional(hou.parmCondType.HideWhen, "{ mode != multiview_to_model }")
     input_folder.addParmTemplate(mv_back)
 
     mv_left = hou.StringParmTemplate(
@@ -360,7 +360,7 @@ def create_tripo_node():
         file_type=hou.fileType.Image,
         help="Left view image (Multiview mode)",
     )
-    mv_left.setConditional(hou.parmCondType.HideWhen, "{ mode != 2 }")
+    mv_left.setConditional(hou.parmCondType.HideWhen, "{ mode != multiview_to_model }")
     input_folder.addParmTemplate(mv_left)
 
     mv_right = hou.StringParmTemplate(
@@ -369,7 +369,7 @@ def create_tripo_node():
         file_type=hou.fileType.Image,
         help="Right view image (Multiview mode)",
     )
-    mv_right.setConditional(hou.parmCondType.HideWhen, "{ mode != 2 }")
+    mv_right.setConditional(hou.parmCondType.HideWhen, "{ mode != multiview_to_model }")
     input_folder.addParmTemplate(mv_right)
 
     ptg.append(input_folder)
