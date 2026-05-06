@@ -29,6 +29,7 @@ TASK_REFINE_MODEL = "refine_model"
 
 # Model versions
 MODEL_VERSIONS = [
+    "P1-20260311",
     "v3.1-20260211",
     "v3.0-20250812",
     "v2.5-20250123",
@@ -39,6 +40,7 @@ MODEL_VERSIONS = [
 
 # Which task types each model supports
 MODEL_SUPPORTED_TASKS = {
+    "P1-20260311": ["image_to_model", "text_to_model", "multiview_to_model"],
     "v3.1-20260211": ["image_to_model", "text_to_model", "multiview_to_model"],
     "v3.0-20250812": ["image_to_model", "text_to_model", "multiview_to_model"],
     "v2.5-20250123": ["image_to_model", "text_to_model", "multiview_to_model"],
@@ -63,14 +65,14 @@ class TripoClient:
     def __init__(self, api_key=None):
         """
         Initialize the Tripo client.
-        
+
         Args:
             api_key: Tripo API key. If not provided, reads from TRIPO_API_KEY env var.
         """
         self.api_key = api_key or os.environ.get("TRIPO_API_KEY")
         if not self.api_key:
             raise ValueError("API key required. Pass api_key or set TRIPO_API_KEY env var.")
-        
+
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {self.api_key}",
@@ -80,7 +82,7 @@ class TripoClient:
         """Upload an image file and get an image token."""
         file_size = os.path.getsize(image_path)
         logger.info(f"Uploading: {image_path} ({file_size} bytes)")
-        
+
         with open(image_path, "rb") as f:
             resp = self.session.post(
                 f"{API_BASE}/upload",
@@ -111,17 +113,16 @@ class TripoClient:
                     f"Model '{model_ver}' does not support '{task_type}'. "
                     f"Supported: {supported}. Try a different model version."
                 )
-        
+
         body = {"type": task_type, **params}
 
         # Log the full request for debugging
         log_body = {k: v for k, v in body.items()}
-        # Redact file tokens for cleaner logs
         if "file" in log_body and isinstance(log_body["file"], dict):
             log_body["file"] = {**log_body["file"], "file_token": log_body["file"].get("file_token", "")[:20] + "..."}
         if "files" in log_body and isinstance(log_body["files"], list):
             log_body["files"] = [{"type": f.get("type"), "file_token": f.get("file_token", "")[:20] + "..."} for f in log_body["files"]]
-        
+
         logger.info(f"POST {API_BASE}/task")
         logger.info(f"Request body: {json.dumps(log_body, indent=2)}")
 
@@ -138,7 +139,6 @@ class TripoClient:
             logger.info(f"Response text: {resp.text[:1000]}")
 
         if resp.status_code != 200:
-            # Build detailed error message with full debug info
             detail = f"HTTP {resp.status_code}"
             try:
                 detail += f"\nResponse: {json.dumps(resp.json(), indent=2)}"
@@ -146,7 +146,7 @@ class TripoClient:
                 detail += f"\nResponse: {resp.text[:1000]}"
             detail += f"\nRequest: {json.dumps(log_body, indent=2)}"
             raise RuntimeError(f"Task creation failed:\n{detail}")
-        
+
         data = resp.json()
 
         if data.get("code") != 0:
@@ -157,13 +157,13 @@ class TripoClient:
     def poll_task(self, task_id, poll_interval=3, timeout=600, callback=None):
         """
         Poll a task until completion or failure.
-        
+
         Args:
             task_id: The task ID to poll
             poll_interval: Seconds between polls
             timeout: Max seconds to wait
             callback: Optional function(progress, status) called on each poll
-        
+
         Returns:
             Task data dict on success
         """
@@ -202,7 +202,6 @@ class TripoClient:
         """Download the generated model from completed task data."""
         output = task_data.get("output", {})
 
-        # Try to get model URL
         model_url = output.get("model")
         if not model_url:
             for key in ["pbr_model", "base_model", "model"]:
@@ -240,35 +239,41 @@ class TripoClient:
                     texture=True, pbr=True,
                     texture_quality="standard", texture_seed=None,
                     texture_alignment=None,
-                    face_limit=None, seed=None, quad=False, auto_size=False):
+                    face_limit=None, seed=None, quad=False, auto_size=False,
+                    orientation=None, smart_low_poly=False,
+                    enable_image_autofix=False):
         """
         Full pipeline: image → 3D model.
-        
+
         Args:
             image_path: Path to input image
             output_path: Path for output model
             fmt: Output format (glb, fbx, obj, stl, usdz)
             callback: Optional progress callback(progress, status)
-            model_version: Model version (e.g., 'v2.5-20250123')
+            model_version: Model version (e.g., 'P1-20260311', 'v3.1-20260211')
+            geometry_quality: 'standard' or 'detailed' (v3.0+ only)
             texture: Enable texturing (True/False)
             pbr: Enable PBR materials (True/False)
-            texture_quality: 'standard' or 'detailed' (4K, v3.0+ only)
+            texture_quality: 'standard' or 'detailed'
             texture_seed: Seed for texture generation (None for random)
             texture_alignment: 'original_image' or 'geometry' (None for default)
             face_limit: Max number of faces (None for auto)
             seed: Geometry generation seed (None for random)
             quad: Generate quad mesh (extra cost)
             auto_size: Scale to real-world dimensions
-        
+            orientation: 'default' or 'align_image' — rotate model to match input image
+            smart_low_poly: Generate low-poly mesh with hand-crafted topology
+            enable_image_autofix: Optimize input image for better results (P1)
+
         Returns:
             Path to downloaded model
         """
         image_token = self.upload_image(image_path)
-        
+
         params = {
             "file": {"type": "image_token", "file_token": image_token},
         }
-        
+
         if model_version:
             params["model_version"] = model_version
             if geometry_quality and geometry_quality != "standard":
@@ -289,7 +294,13 @@ class TripoClient:
             params["quad"] = True
         if auto_size:
             params["auto_size"] = True
-        
+        if orientation and orientation != "default":
+            params["orientation"] = orientation
+        if smart_low_poly:
+            params["smart_low_poly"] = True
+        if enable_image_autofix:
+            params["enable_image_autofix"] = True
+
         task_id = self.create_task(TASK_IMAGE_TO_MODEL, params)
         task_data = self.poll_task(task_id, callback=callback)
         return self.download_model(task_data, output_path, fmt)
@@ -299,16 +310,18 @@ class TripoClient:
                    texture=True, pbr=True,
                    texture_quality="standard", texture_seed=None,
                    texture_alignment=None,
-                   face_limit=None, seed=None, quad=False, auto_size=False):
+                   face_limit=None, seed=None, quad=False, auto_size=False,
+                   orientation=None, smart_low_poly=False):
         """
         Full pipeline: text prompt → 3D model.
-        
+
         Args:
             prompt: Text description
             output_path: Path for output model
             fmt: Output format
             callback: Optional progress callback(progress, status)
-            model_version: Model version (e.g., 'v2.5-20250123')
+            model_version: Model version
+            geometry_quality: 'standard' or 'detailed'
             texture: Enable texturing (True/False)
             pbr: Enable PBR materials (True/False)
             texture_quality: 'standard' or 'detailed'
@@ -318,12 +331,14 @@ class TripoClient:
             seed: Geometry generation seed (None for random)
             quad: Generate quad mesh (extra cost)
             auto_size: Scale to real-world dimensions
-        
+            orientation: 'default' or 'align_image'
+            smart_low_poly: Generate low-poly mesh with hand-crafted topology
+
         Returns:
             Path to downloaded model
         """
         params = {"prompt": prompt}
-        
+
         if model_version:
             params["model_version"] = model_version
             if geometry_quality and geometry_quality != "standard":
@@ -344,7 +359,11 @@ class TripoClient:
             params["quad"] = True
         if auto_size:
             params["auto_size"] = True
-        
+        if orientation and orientation != "default":
+            params["orientation"] = orientation
+        if smart_low_poly:
+            params["smart_low_poly"] = True
+
         task_id = self.create_task(TASK_TEXT_TO_MODEL, params)
         task_data = self.poll_task(task_id, callback=callback)
         return self.download_model(task_data, output_path, fmt)
@@ -354,16 +373,18 @@ class TripoClient:
                         texture=True, pbr=True,
                         texture_quality="standard", texture_seed=None,
                         texture_alignment=None,
-                        face_limit=None, seed=None, quad=False, auto_size=False):
+                        face_limit=None, seed=None, quad=False, auto_size=False,
+                        orientation=None, smart_low_poly=False):
         """
         Full pipeline: multiple views → 3D model.
-        
+
         Args:
             image_paths: List of image paths (front, back, left, right)
             output_path: Path for output model
             fmt: Output format
             callback: Optional progress callback(progress, status)
-            model_version: Model version (e.g., 'v2.5-20250123')
+            model_version: Model version
+            geometry_quality: 'standard' or 'detailed'
             texture: Enable texturing (True/False)
             pbr: Enable PBR materials (True/False)
             texture_quality: 'standard' or 'detailed'
@@ -373,16 +394,18 @@ class TripoClient:
             seed: Geometry generation seed (None for random)
             quad: Generate quad mesh (extra cost)
             auto_size: Scale to real-world dimensions
-        
+            orientation: 'default' or 'align_image'
+            smart_low_poly: Generate low-poly mesh with hand-crafted topology
+
         Returns:
             Path to downloaded model
         """
         tokens = [self.upload_image(p) for p in image_paths]
-        
+
         params = {
             "files": [{"type": "image_token", "file_token": t} for t in tokens],
         }
-        
+
         if model_version:
             params["model_version"] = model_version
             if geometry_quality and geometry_quality != "standard":
@@ -403,7 +426,12 @@ class TripoClient:
             params["quad"] = True
         if auto_size:
             params["auto_size"] = True
-        
+        if orientation and orientation != "default":
+            params["orientation"] = orientation
+        if smart_low_poly:
+            params["smart_low_poly"] = True
+
         task_id = self.create_task(TASK_MULTIVIEW_TO_MODEL, params)
         task_data = self.poll_task(task_id, callback=callback)
         return self.download_model(task_data, output_path, fmt)
+
